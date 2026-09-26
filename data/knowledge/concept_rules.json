@@ -658,6 +658,81 @@
       "confidence": "medium",
       "sources": []
     },
+    "choice_option": {
+      "aliases": [
+        "choice option",
+        "choice",
+        "option route",
+        "hb option",
+        "h option"
+      ],
+      "family": "option_route",
+      "read_family": "matchup",
+      "primary_stress": [
+        "conflict linebacker/nickel leverage",
+        "checkdown/option window"
+      ],
+      "pre_snap_keys": [
+        "Identify the defender responsible for the option receiver and his depth/leverage."
+      ],
+      "post_snap_guidance": [
+        "Let the receiver's route react to leverage; the ball should go where the conflict defender is not.",
+        "Treat as a quick, high-percentage answer versus man or a soft zone window."
+      ],
+      "coverage_fit": {
+        "cover_0": 2,
+        "cover_1": 2,
+        "cover_2_man": 2,
+        "cover_2": 1,
+        "cover_3": 1,
+        "cover_4": 1,
+        "cover_6": 1
+      },
+      "pressure": {
+        "fit": 2,
+        "note": "A quick option route can be a fast answer versus pressure if the checkdown is unblocked."
+      },
+      "assignment_ids": [],
+      "confidence": "medium",
+      "sources": []
+    },
+    "corner": {
+      "aliases": [
+        "corner",
+        "corner route",
+        "y corner",
+        "flag route"
+      ],
+      "family": "breaking_deep",
+      "read_family": "matchup",
+      "primary_stress": [
+        "deep outside leverage",
+        "corner/safety leverage on the sideline"
+      ],
+      "pre_snap_keys": [
+        "Check outside leverage and whether a safety has help over the top."
+      ],
+      "post_snap_guidance": [
+        "Throw the corner route where the defender is not: outside if he sinks under, over the top if he squats.",
+        "Needs time to develop; confirm protection before committing."
+      ],
+      "coverage_fit": {
+        "cover_0": 1,
+        "cover_1": 2,
+        "cover_2_man": 1,
+        "cover_2": 3,
+        "cover_3": 1,
+        "cover_4": 2,
+        "cover_6": 2
+      },
+      "pressure": {
+        "fit": -1,
+        "note": "A deep-breaking route needs time; risky versus unblocked pressure."
+      },
+      "assignment_ids": [],
+      "confidence": "medium",
+      "sources": []
+    },
     "read_option": {
       "aliases": [
         "read option",

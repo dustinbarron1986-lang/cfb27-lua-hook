@@ -1,0 +1,12 @@
+{
+  "metadata": {
+    "schemaVersion": 1,
+    "purpose": "Manual corrections for exact play knowledge. Keys are playbookId|normalized formation|normalized play.",
+    "notes": [
+      "Use this only when the in-game play art or a trusted source has been checked.",
+      "An override may provide verified receiver buttons, route labels, route SVG path keys, and a designed progression.",
+      "Do not mark progressionVerified true unless the intended QB read order is actually known."
+    ]
+  },
+  "plays": {}
+}
