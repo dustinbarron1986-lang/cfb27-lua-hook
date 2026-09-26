@@ -7,6 +7,14 @@ College Football 27 on PC.
 > build, is intended only for offline play, and does not include or provide an
 > anticheat bypass.
 
+## Project identity
+
+This repository is a fork of Eric Levinson's [`cfb27-lua-hook`](https://github.com/eric-levinson/cfb27-lua-hook),
+used as the foundation for the CFB27 Coordinator Mod: an offline play-calling
+assistant (`src/football/`, `src/coordinator/`) built on top of the Lua hook's
+telemetry and native integration. Upstream remains
+https://github.com/eric-levinson/cfb27-lua-hook.
+
 ## Project direction
 
 CFB27 Lua Hook is the supported product in this repository:
@@ -53,6 +61,78 @@ node packages/cli/bin/cfb27lua.cjs install
 
 The CLI requires explicit game, MMC, and artifact paths through flags or the
 environment variables documented in the getting-started guide.
+
+## Coordinator Mod
+
+The Coordinator Mod is an offline play-calling assistant layered on top of the
+Lua hook's telemetry. Its main pieces:
+
+- **Hook / telemetry layer** — `native/host/lua_host.cpp` (native DLL) and
+  `scripts/autorun.lua` (the Lua runtime script) read live game state and
+  publish `coord.state` telemetry over the hook's named-pipe protocol.
+- **Live coordinator orchestration** — `src/coordinator/live-coordinator.cjs`
+  consumes that telemetry via the SDK, reduces raw ticks into completed plays
+  (`src/coordinator/snap-reducer.cjs`), and drives the football engine.
+- **Football engine** — `src/football/engine.js`, wiring together scoring,
+  memory, and recommendation modules.
+- **Knowledge layer** — `src/football/knowledge/` (concept/coverage rules,
+  catalog resolution, curated play knowledge).
+- **Offense/defense recommendation layer** — `src/football/recommendation/`
+  (play selection, defensive selection/eligibility, execution advice).
+- **Playbooks / reference data** — `src/football/playbooks/` and
+  `data/playbooks/` (playbook catalog, verified play/formation membership,
+  play-location index).
+- **UI** — `src/football/ui/coordinator-window.js`, a local browser window
+  showing recommendations and letting you switch playbooks.
+- **Persistence/runtime state** — `src/football/db/coordinator-database.js`
+  backs playbook storage; see "Runtime data" below for what is and isn't
+  version-controlled.
+
+### Normal run flow
+
+Boot the game through MMC in your offline configuration as usual. The
+installed hook auto-loads `scripts/autorun.lua` — **do not run `autorun.lua`
+manually**; it is not a standalone script and is only meant to execute inside
+the game process via the installed hook.
+
+Once the game is running, start the coordinator separately:
+
+```powershell
+node .\scripts\run-coordinator.cjs
+```
+
+This opens the coordinator UI and begins following live telemetry from the
+game.
+
+### Runtime data
+
+`data/coordinator.db`, `data/coordinator-config.json`, and `.vscode/` are
+local, machine-specific runtime/editor state and are intentionally not
+version-controlled (see `.gitignore`). Static football/playbook reference
+data under `data/knowledge/` and `data/playbooks/` — including the large
+`cfb27-playbook-index.json` and `pro-style-play-knowledge.json` — *is*
+version-controlled: it is deterministic project knowledge, not runtime
+output, and in some cases its original generator/source inputs no longer
+exist, making the committed copy the only surviving version.
+
+### Tests
+
+```powershell
+npm test
+```
+
+runs the full suite via `scripts/run-tests.cjs`, which auto-discovers every
+`tests/*.test.cjs` and `packages/*/test/*.test.cjs` file, including the
+coordinator/football tests. `npm run check` runs static syntax checks over
+the SDK/CLI/native-adjacent scripts.
+
+### Known architecture issue
+
+Live per-game/per-snap performance history is currently **in-memory only**
+(`src/football/memory/performance-store.js`) and resets whenever the
+coordinator process restarts. Persistent cross-session performance/tendency
+storage is a known future coordinator architecture task, not something this
+revision implements.
 
 ## Safety boundary
 
