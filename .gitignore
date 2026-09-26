@@ -29,3 +29,10 @@ Thumbs.db
 .requirements/
 .requirements/*.md
 .requirements/*.txt
+
+# Local runtime DB/config + editor settings; do not publish.
+data/coordinator.db
+data/coordinator.db-wal
+data/coordinator.db-shm
+data/coordinator-config.json
+.vscode/
