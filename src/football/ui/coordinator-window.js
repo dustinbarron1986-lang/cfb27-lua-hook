@@ -107,7 +107,7 @@ function renderPage(title = 'CFB 27 Offensive Coordinator') {
     min-height: 100vh;
     padding: 18px 20px 20px;
     display: grid;
-    grid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto auto auto 1fr auto;
     gap: 13px;
   }
   .top {
@@ -272,6 +272,41 @@ function renderPage(title = 'CFB 27 Offensive Coordinator') {
   }
   .warn { color: var(--warn); }
   .danger { color: var(--danger); }
+
+  .settingsPanel {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(18,25,35,.55);
+    font-size: 13px;
+  }
+  .settingsPanel summary {
+    cursor: pointer;
+    padding: 7px 11px;
+    color: var(--muted);
+    font-weight: 800;
+    letter-spacing: .08em;
+    list-style: none;
+  }
+  .settingsPanel summary::-webkit-details-marker { display: none; }
+  .settingsBody {
+    padding: 4px 12px 11px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 7px 10px;
+    align-items: center;
+  }
+  .settingsBody label { color: var(--muted); font-size: 12px; font-weight: 700; }
+  .settingsBody select {
+    background: #0f141a; color: var(--text); border: 1px solid var(--line);
+    border-radius: 7px; padding: 6px 8px; font-size: 13px; max-width: 100%;
+  }
+  .settingsStatus { grid-column: 2; font-size: 11.5px; color: var(--muted); margin-top: -3px; }
+  .settingsActions { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+  .settingsActions button {
+    background: var(--accent); color: #07110b; border: 0; border-radius: 7px;
+    padding: 6px 14px; font-weight: 800; font-size: 12px; cursor: pointer;
+  }
+  .settingsMessage { font-size: 11.5px; color: var(--muted); }
   @media (max-width: 680px) {
     .coachGrid { grid-template-columns: 1fr; }
   }
@@ -289,9 +324,24 @@ function renderPage(title = 'CFB 27 Offensive Coordinator') {
 <body>
 <main>
   <div class="top">
-    <div class="title">CFB 27 OFFENSIVE COORDINATOR</div>
+    <div id="pageTitle" class="title">CFB 27 COORDINATOR</div>
     <div class="live"><span id="dot" class="dot"></span><span id="liveText">CONNECTING</span></div>
   </div>
+  <details class="settingsPanel">
+    <summary>⚙ PLAYBOOKS</summary>
+    <div class="settingsBody">
+      <label for="offenseSelect">Offense</label>
+      <select id="offenseSelect"><option value="">Loading…</option></select>
+      <div id="offenseStatus" class="settingsStatus"></div>
+      <label for="defenseSelect">Defense</label>
+      <select id="defenseSelect"><option value="">Loading…</option></select>
+      <div id="defenseStatus" class="settingsStatus"></div>
+      <div class="settingsActions">
+        <button id="savePlaybooks" type="button">Save</button>
+        <span id="settingsMessage" class="settingsMessage"></span>
+      </div>
+    </div>
+  </details>
   <div id="situation" class="situation"><span class="pill">Waiting for game state…</span></div>
   <section id="stage" class="stage">
     <div id="eyebrow" class="eyebrow">STARTING</div>
@@ -308,9 +358,32 @@ const els = {
   situation: document.getElementById('situation'), eyebrow: document.getElementById('eyebrow'),
   play: document.getElementById('play'), formation: document.getElementById('formation'),
   defense: document.getElementById('defense'), detail: document.getElementById('detail'),
-  book: document.getElementById('book'), game: document.getElementById('game')
+  book: document.getElementById('book'), game: document.getElementById('game'),
+  pageTitle: document.getElementById('pageTitle')
 };
 let lastUpdated = null;
+
+// Offense/defense phases have reliable side semantics (each is only ever set
+// from one side's code path); 'result' currently has no side indicator in
+// state at all (showResult() is wired to the offense path only today, but
+// that's an implementation detail, not something this display should assume
+// will always remain true) and 'waiting'/'error' precede knowing a side --
+// all three get the neutral title rather than a guess.
+function titleForPhase(phase) {
+  if (phase === 'defensive_huddle' || phase === 'defensive_unavailable') return 'CFB 27 DEFENSIVE COORDINATOR';
+  if (phase === 'huddle' || phase === 'selected' || phase === 'audible' || phase === 'unavailable') return 'CFB 27 OFFENSIVE COORDINATOR';
+  return 'CFB 27 COORDINATOR';
+}
+
+function setFormation(text) {
+  if (text) {
+    els.formation.hidden = false;
+    els.formation.textContent = text;
+  } else {
+    els.formation.hidden = true;
+    els.formation.textContent = '';
+  }
+}
 
 function esc(v) {
   return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -490,16 +563,19 @@ function render(s) {
   els.defense.hidden = true;
   els.defense.innerHTML = '';
   els.detail.className = 'why';
+  const title = titleForPhase(s.phase);
+  els.pageTitle.textContent = title;
+  document.title = title;
 
   if (s.phase === 'huddle') {
     els.eyebrow.textContent = 'CALL';
     els.play.textContent = s.call || 'NO CALL AVAILABLE';
-    els.formation.textContent = s.formation || '';
+    setFormation(s.formation);
     els.detail.innerHTML = detail('WHY', s.why);
   } else if (s.phase === 'selected' || s.phase === 'audible') {
     els.eyebrow.textContent = s.phase === 'audible' ? 'AUDIBLE' : 'YOUR CALL';
     els.play.textContent = s.call || 'PLAY SELECTED';
-    els.formation.textContent = s.formation || '';
+    setFormation(s.formation);
     if (s.defense) {
       els.defense.hidden = false;
       els.defense.innerHTML = detail('DEFENSE', s.defense + (s.defenseFormation ? ' — ' + s.defenseFormation : ''));
@@ -507,27 +583,46 @@ function render(s) {
     els.detail.className = 'read';
     els.detail.innerHTML = renderGuide(s.guide) ||
       detail('READ', Array.isArray(s.read) && s.read.length ? s.read : (s.read || 'No specific adjustment.'));
+  } else if (s.phase === 'defensive_huddle') {
+    els.eyebrow.textContent = 'DEFENSIVE CALL';
+    els.play.textContent = s.call || 'NO CALL AVAILABLE';
+    setFormation(s.formation);
+    if (s.cpuPlay) {
+      els.defense.hidden = false;
+      els.defense.innerHTML = detail('OFFENSE', s.cpuPlay + (s.cpuFormation ? ' — ' + s.cpuFormation : ''));
+    }
+    els.detail.innerHTML = detail('WHY', s.why);
+  } else if (s.phase === 'defensive_unavailable') {
+    els.eyebrow.textContent = 'NO CALL';
+    els.play.textContent = 'Defensive recommendation unavailable';
+    setFormation(null);
+    if (s.cpuPlay) {
+      els.defense.hidden = false;
+      els.defense.innerHTML = detail('OFFENSE', s.cpuPlay + (s.cpuFormation ? ' — ' + s.cpuFormation : ''));
+    }
+    els.detail.className = 'why warn';
+    els.detail.innerHTML = detail('WHY', s.why || 'Waiting for a valid defensive read.');
   } else if (s.phase === 'result') {
     els.eyebrow.textContent = 'RESULT';
     els.play.textContent = s.result || 'Play complete';
-    els.formation.textContent = s.call || '';
+    setFormation(s.call);
     els.detail.innerHTML = s.why ? detail('RECORDED', s.why) : '';
   } else if (s.phase === 'unavailable') {
     els.eyebrow.textContent = 'NO CALL';
     els.play.textContent = 'Recommendation unavailable';
-    els.formation.textContent = '';
+    setFormation(null);
     els.detail.className = 'why warn';
     els.detail.innerHTML = detail('WHY', s.why || 'Waiting for a valid huddle state.');
   } else if (s.phase === 'error') {
     els.eyebrow.textContent = 'CONNECTION';
     els.play.textContent = 'Coordinator waiting';
-    els.formation.textContent = '';
+    setFormation(null);
     els.detail.className = 'why danger';
     els.detail.innerHTML = detail('STATUS', s.error || 'Telemetry unavailable.');
   } else {
     els.eyebrow.textContent = 'READY';
     els.play.textContent = s.message || 'Waiting for huddle…';
-    els.formation.textContent = '';
+    setFormation(null);
     els.detail.innerHTML = '';
   }
 }
@@ -539,9 +634,105 @@ async function poll() {
 }
 poll();
 setInterval(poll, 250);
+
+const settingsEls = {
+  offenseSelect: document.getElementById('offenseSelect'),
+  defenseSelect: document.getElementById('defenseSelect'),
+  offenseStatus: document.getElementById('offenseStatus'),
+  defenseStatus: document.getElementById('defenseStatus'),
+  saveButton: document.getElementById('savePlaybooks'),
+  message: document.getElementById('settingsMessage')
+};
+let playbookLists = { offense: [], defense: [] };
+
+function describeBook(book) {
+  if (!book) return '';
+  if (book.membershipVerified) return book.playCount + ' verified paths';
+  return book.playCount + ' catalog plays / unverified membership';
+}
+function populateSelect(select, books, selectedId, placeholder) {
+  const options = ['<option value="">' + esc(placeholder) + '</option>'];
+  for (const book of books) {
+    const sel = String(book.id) === String(selectedId) ? ' selected' : '';
+    options.push('<option value="' + esc(book.id) + '"' + sel + '>' + esc(book.name) + '</option>');
+  }
+  select.innerHTML = options.join('');
+}
+function updateStatus(el, books, selectedId, emptyText) {
+  if (selectedId == null || selectedId === '') { el.textContent = emptyText; return; }
+  const book = books.find(b => String(b.id) === String(selectedId));
+  el.textContent = book ? describeBook(book) : 'selected playbook not found in current list';
+}
+async function loadSettingsPanel() {
+  try {
+    const [playbooksRes, configRes] = await Promise.all([
+      fetch('/api/playbooks', { cache: 'no-store' }),
+      fetch('/api/config', { cache: 'no-store' })
+    ]);
+    playbookLists = playbooksRes.ok ? await playbooksRes.json() : { offense: [], defense: [] };
+    const config = configRes.ok ? await configRes.json() : {};
+    populateSelect(settingsEls.offenseSelect, playbookLists.offense || [], config.offensePlaybookId, 'Select offensive playbook');
+    populateSelect(settingsEls.defenseSelect, playbookLists.defense || [], config.defensePlaybookId, 'Select defensive playbook');
+    updateStatus(settingsEls.offenseStatus, playbookLists.offense || [], config.offensePlaybookId, 'none selected');
+    updateStatus(settingsEls.defenseStatus, playbookLists.defense || [], config.defensePlaybookId, 'none selected');
+  } catch (_) {
+    settingsEls.message.textContent = 'Could not load playbook list.';
+  }
+}
+settingsEls.offenseSelect.addEventListener('change', () => {
+  updateStatus(settingsEls.offenseStatus, playbookLists.offense || [], settingsEls.offenseSelect.value, 'none selected');
+});
+settingsEls.defenseSelect.addEventListener('change', () => {
+  updateStatus(settingsEls.defenseStatus, playbookLists.defense || [], settingsEls.defenseSelect.value, 'none selected');
+});
+settingsEls.saveButton.addEventListener('click', async () => {
+  settingsEls.message.textContent = 'Saving…';
+  const requests = [];
+  if (settingsEls.offenseSelect.value) requests.push(['offense', settingsEls.offenseSelect.value]);
+  if (settingsEls.defenseSelect.value) requests.push(['defense', settingsEls.defenseSelect.value]);
+  if (!requests.length) { settingsEls.message.textContent = 'Choose a playbook first.'; return; }
+  try {
+    const results = [];
+    for (const [side, playbookId] of requests) {
+      const r = await fetch('/api/config/playbooks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ side, playbookId })
+      });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error || ('Failed to save ' + side + ' playbook'));
+      results.push(body);
+    }
+    const applied = results.some(r => r.appliedImmediately);
+    settingsEls.message.textContent = 'Saved' + (applied ? ' — recommendation updated' : ' — applies to next recommendation');
+    await loadSettingsPanel();
+  } catch (error) {
+    settingsEls.message.textContent = String(error?.message || error);
+  }
+});
+loadSettingsPanel();
 </script>
 </body>
 </html>`;
+}
+
+function readJsonBody(req, maxLength = 10_000) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk;
+      if (body.length > maxLength) req.destroy();
+    });
+    req.on('end', () => {
+      if (!body) return resolve({});
+      try {
+        resolve(JSON.parse(body));
+      } catch (error) {
+        reject(new Error('Invalid JSON body'));
+      }
+    });
+    req.on('error', reject);
+  });
 }
 
 class CoordinatorWindow {
@@ -550,6 +741,10 @@ class CoordinatorWindow {
     this.port = Number(options.port || 0);
     this.autoOpen = options.autoOpen !== false;
     this.title = options.title || 'CFB 27 Offensive Coordinator';
+    // Optional: { listPlaybooks(), getConfig(), setPlaybookSelection({side, playbookId}) }.
+    // Kept generic/injected so this class stays a pure UI/state renderer and
+    // never becomes database-aware itself.
+    this.playbookService = options.playbookService || null;
     this.server = null;
     this.url = null;
     this.launch = null;
@@ -567,6 +762,8 @@ class CoordinatorWindow {
       why: null,
       defense: null,
       defenseFormation: null,
+      cpuPlay: null,
+      cpuFormation: null,
       read: null,
       guide: null,
       result: null,
@@ -618,6 +815,8 @@ class CoordinatorWindow {
         why: action?.reason || 'No legal recommendation is available.',
         defense: null,
         defenseFormation: null,
+        cpuPlay: null,
+        cpuFormation: null,
         read: null,
         guide: null,
         result: null
@@ -625,6 +824,40 @@ class CoordinatorWindow {
     }
     return this._set({
       phase: 'huddle',
+      call: action.play?.name || null,
+      formation: action.locator?.formation || action.play?.formation || null,
+      why: action.reasons && action.reasons.length ? action.reasons : (action.reason || null),
+      defense: null,
+      defenseFormation: null,
+      cpuPlay: null,
+      cpuFormation: null,
+      read: null,
+      guide: null,
+      result: null
+    });
+  }
+
+  showDefensiveRecommendation(action, state) {
+    this.updateSituation(state);
+    if (!action?.available) {
+      return this._set({
+        phase: 'defensive_unavailable',
+        cpuPlay: action?.cpuPlay?.name || null,
+        cpuFormation: action?.cpuPlay?.formation || null,
+        call: null,
+        formation: null,
+        why: action?.reason || 'No legal defensive recommendation is available.',
+        defense: null,
+        defenseFormation: null,
+        read: null,
+        guide: null,
+        result: null
+      });
+    }
+    return this._set({
+      phase: 'defensive_huddle',
+      cpuPlay: action.cpuPlay?.name || null,
+      cpuFormation: action.cpuPlay?.formation || null,
       call: action.play?.name || null,
       formation: action.locator?.formation || action.play?.formation || null,
       why: action.reasons && action.reasons.length ? action.reasons : (action.reason || null),
@@ -652,6 +885,8 @@ class CoordinatorWindow {
       why: null,
       defense: action?.opponentPlay?.name || null,
       defenseFormation: action?.opponentPlay?.formation || null,
+      cpuPlay: null,
+      cpuFormation: null,
       read: notes,
       guide: advice?.guide || null,
       result: null
@@ -675,6 +910,8 @@ class CoordinatorWindow {
       why: null,
       defense: null,
       defenseFormation: null,
+      cpuPlay: null,
+      cpuFormation: null,
       read: null,
       guide: null,
       result: [yards, ...flags].join(' • ')
@@ -699,6 +936,32 @@ class CoordinatorWindow {
           'cache-control': 'no-store, max-age=0'
         });
         res.end(JSON.stringify(this.state));
+        return;
+      }
+      if (req.method === 'GET' && req.url === '/api/playbooks') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store, max-age=0' });
+        res.end(JSON.stringify(this.playbookService ? this.playbookService.listPlaybooks() : { offense: [], defense: [] }));
+        return;
+      }
+      if (req.method === 'GET' && req.url === '/api/config') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store, max-age=0' });
+        res.end(JSON.stringify(this.playbookService ? this.playbookService.getConfig() : {}));
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/api/config/playbooks') {
+        if (!this.playbookService) {
+          res.writeHead(503, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'Playbook selection is not available in this session.' }));
+          return;
+        }
+        readJsonBody(req).then(body => {
+          const result = this.playbookService.setPlaybookSelection({ side: body.side, playbookId: body.playbookId });
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(result));
+        }).catch(error => {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: String(error?.message || error) }));
+        });
         return;
       }
       if (req.method === 'GET' && req.url === '/health') {

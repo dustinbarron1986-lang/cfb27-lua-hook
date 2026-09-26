@@ -1,8 +1,24 @@
 const fs = require("fs");
 const path = require("path");
 
+let CatalogResolver = null;
+try {
+  ({ CatalogResolver } = require("./catalog-resolver"));
+} catch (_) {
+  CatalogResolver = null;
+}
+
 const DEFAULT_COVERAGE_PATH = path.join(__dirname, "../../../data/knowledge/coverage_rules.json");
 const DEFAULT_CONCEPT_PATH = path.join(__dirname, "../../../data/knowledge/concept_rules.json");
+
+function safeCreateCatalogResolver(options) {
+  if (!CatalogResolver) return null;
+  try {
+    return new CatalogResolver(options || {});
+  } catch (_) {
+    return null;
+  }
+}
 
 function loadJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -33,6 +49,9 @@ class KnowledgeEngine {
     this.conceptData = options.conceptData || loadJson(options.conceptPath || DEFAULT_CONCEPT_PATH);
     this.coverageAliasIndex = buildAliasIndex(this.coverageData.coverages);
     this.conceptAliasIndex = buildAliasIndex(this.conceptData.concepts);
+    this.catalogResolver = options.catalogResolver !== undefined
+      ? options.catalogResolver
+      : safeCreateCatalogResolver(options.catalogOptions);
   }
 
   resolveCoverage(value) {
@@ -41,6 +60,18 @@ class KnowledgeEngine {
 
     const exact = this.coverageAliasIndex.get(n);
     if (exact) return exact;
+
+    // Verified static-catalog lookup (exact play name -> assignment-family-derived
+    // coverage) takes priority over the regex fallback below, when it's confident
+    // and we can actually speak to that coverage key.
+    if (this.catalogResolver) {
+      try {
+        const hit = this.catalogResolver.resolveCoverage(value);
+        if (hit && hit.key && this.coverageData.coverages[hit.key]) return hit.key;
+      } catch (_) {
+        // fall through to the regex fallback below
+      }
+    }
 
     // Conservative fuzzy fallback for live game strings such as "Cover 1 LB Blitz".
     if (/\bcover\s*0\b|\bzero\b/.test(n)) return "cover_0";
@@ -59,6 +90,20 @@ class KnowledgeEngine {
 
     const exact = this.conceptAliasIndex.get(n);
     if (exact) return exact;
+
+    // Verified static-catalog lookup (exact play name -> primaryConcept) takes
+    // priority over the regex fallback below, when it's confident and the
+    // resolved key is one we actually have advice data for.
+    if (this.catalogResolver) {
+      try {
+        const hit = this.catalogResolver.resolveConcept(value);
+        if (hit && hit.key && hit.confidence !== "low" && this.conceptData.concepts[hit.key]) {
+          return hit.key;
+        }
+      } catch (_) {
+        // fall through to the regex fallback below
+      }
+    }
 
     const tests = [
       ["rpo_glance_post", /\brpo\b.*\b(glance|post)\b|\balert\s+(glance|post)\b/],
