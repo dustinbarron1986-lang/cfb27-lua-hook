@@ -2316,6 +2316,13 @@ DWORD WINAPI Start(void* module_value) {
   if (!g_lua) { g_last_error = "could not create Lua state"; return 1; }
   luaL_openlibs(g_lua);
   RegisterApi(g_lua);
+
+  std::string telemetry_error;
+  if (!cfb27::telemetry::RegisterTelemetryTypes(
+          std::vector<std::string>{"coord.state"}, telemetry_error)) {
+    Log("coordinator telemetry registration failed: " + telemetry_error);
+  }
+
   RunAutorun();
   UpdateGameReady(true);
   std::thread(PipeServer).detach();
@@ -2342,3 +2349,5 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
   }
   return TRUE;
 }
+
+
