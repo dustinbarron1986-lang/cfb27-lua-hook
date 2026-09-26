@@ -1,0 +1,345 @@
+{
+  "metadata": {
+    "version": "0.1.0",
+    "purpose": "Normalized coverage knowledge for the CFB 27 coordinator recommendation/read engine.",
+    "principles": [
+      "Coverage labels describe families, not guarantees; match/rotation rules can change after the snap.",
+      "Pre-snap indicators are clues, not proof. Prefer post-snap confirmation when available.",
+      "A concept being listed as a stress point does not mean it automatically wins.",
+      "EA/CFB gameplay observations and real-football coaching rules are tracked separately when possible."
+    ],
+    "sources": {
+      "benkert_cfb26_coverages": {
+        "title": "How To Read EVERY Coverage In CFB 26!",
+        "creator": "Kurt Benkert",
+        "url": "https://www.youtube.com/watch?v=GiwfgE2oJMs",
+        "kind": "video",
+        "notes": "CFB-specific coverage identification and gameplay translation."
+      },
+      "benkert_cfb25_reads": {
+        "title": "The Easiest Way to Read a Defense in College Football 25",
+        "creator": "Kurt Benkert",
+        "url": "https://www.youtube.com/watch?v=vK692xeG5Rw",
+        "kind": "video",
+        "notes": "Pre-snap and post-snap reads in College Football 25."
+      },
+      "mckie_cfb25_rpos": {
+        "title": "Top 5 RPOs in EA College Football 25's Veer & Shoot Playbook",
+        "creator": "Coach McKie Plays",
+        "url": "https://www.youtube.com/watch?v=wk0iVF2tnek",
+        "kind": "video",
+        "notes": "CFB-specific RPO Alert Bubble Stick, Read Bubble, Glance Post, and Read Flat teaching."
+      },
+      "mckie_veer_shoot": {
+        "title": "Veer & Shoot / RPO teaching in NCAA College Football 25",
+        "creator": "Coach McKie Plays",
+        "url": "https://www.youtube.com/watch?v=BhzrODLvv9U",
+        "kind": "video",
+        "notes": "Veer & Shoot basics, RPO hitches, Alert Post ISO, and game-film adjustments."
+      },
+      "mckie_mesh": {
+        "title": "Coaching and Drilling the Mesh Concept: Featuring Coach McKie",
+        "creator": "3DownDevelopment / Coach McKie",
+        "url": "https://www.youtube.com/watch?v=HUQmDnwnrsM",
+        "kind": "video",
+        "notes": "Mesh spacing, receiver coverage reads, QB footwork and protection context."
+      },
+      "usa_coverage": {
+        "title": "Teach your quarterback how to read defenses",
+        "creator": "USA Football",
+        "url": "https://blogs.usafootball.com/blog/730/rcfamilies.com",
+        "kind": "article",
+        "notes": "Baseline structures and commonly attacked areas for Cover 1/2/3/4."
+      },
+      "xando_read_families": {
+        "title": "Using Read Families to Train QB Progressions",
+        "creator": "X&O Labs / Jeff DiSandro",
+        "url": "https://www.xandolabs.com/the-lab/position-groups/quarterback/pass-game-mechanics-quarterback/using-read-families-to-train-qb-progressions/",
+        "kind": "article",
+        "notes": "Progression reads, defender keys, matchups, and combination read families."
+      },
+      "xando_airraid_progressions": {
+        "title": "Adjusting Route Progressions in Air Raid Staples",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/offensive-systems/air-raid/adjusting-route-progressions-in-air-raid-staples/",
+        "kind": "article",
+        "notes": "Mesh, Flood, Smash, Spacing, Levels, Four Verticals and stable progression philosophy."
+      },
+      "xando_fourverts": {
+        "title": "Four Vertical Landmarks, Reads and Progressions",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/pass-game/vertical-pass-concepts/four-vertical-landmarks-reads-and-progressions/",
+        "kind": "article",
+        "notes": "Four-vertical landmarks, leverage adjustments and coverage-based progression variants."
+      },
+      "xando_mesh": {
+        "title": "Henderson State’s Flat Control Variations in the Mesh Concept",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/pass-game/intermediate-pass-concepts/henderson-states-flat-control-variations-in-the-mesh-concept/",
+        "kind": "article",
+        "notes": "Mesh as a man/zone answer with under/over mesh and flat-control progression variants."
+      },
+      "xando_flood": {
+        "title": "Protecting Two-Back Runs with Flood and Naked PAPs",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/personnel/12-21-personnel-concepts/protecting-two-back-runs-with-flood-and-naked-paps/",
+        "kind": "article",
+        "notes": "Flood progression example: deep-to-middle-to-short while stressing the flat defender."
+      },
+      "xando_stick": {
+        "title": "Using Stick and Spacing Play-Action Pass as Triple Option Schemes",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/personnel/20-personnel-concepts/using-stick-and-spacing-play-action-pass-as-triple-option-schemes/",
+        "kind": "article",
+        "notes": "Stick pre-snap gift and post-snap movement-key example; pressure answer."
+      },
+      "xando_stickdraw": {
+        "title": "RPOs: Case Two – Manipulating Box Defenders",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/rpos/post-snap-manipulations/rpos-case-two-manipulating-box-defenders/",
+        "kind": "article",
+        "notes": "Stick/Draw RPO structure and play-side linebacker conflict read."
+      }
+    }
+  },
+  "coverages": {
+    "cover_0": {
+      "aliases": [
+        "cover 0",
+        "zero",
+        "0 man",
+        "man blitz",
+        "zero blitz"
+      ],
+      "family": "man",
+      "shell": "zero_high",
+      "structure": "Man coverage with no dedicated deep middle safety; commonly paired with pressure.",
+      "pre_snap_indicators": [
+        "No true deep-middle safety or safeties walked down.",
+        "Defenders aligned with obvious man leverage across eligible receivers.",
+        "Pressure body count can exceed the offense's available blockers."
+      ],
+      "post_snap_confirmation": [
+        "Coverage defenders carry receivers immediately with little or no deep help.",
+        "One or more second-level/secondary defenders add to the rush."
+      ],
+      "stress_points": [
+        "quick separators",
+        "crossers",
+        "rub/pick traffic",
+        "fast outlets",
+        "one-on-one leverage wins"
+      ],
+      "risk_notes": [
+        "The ball must usually come out quickly; long-developing concepts can expose protection."
+      ],
+      "confidence": "medium",
+      "sources": [
+        "benkert_cfb26_coverages",
+        "benkert_cfb25_reads"
+      ]
+    },
+    "cover_1": {
+      "aliases": [
+        "cover 1",
+        "1 robber",
+        "cover 1 hole",
+        "one high man",
+        "man free"
+      ],
+      "family": "man",
+      "shell": "one_high",
+      "structure": "Man coverage underneath with a deep middle safety; some variants add a robber/hole defender.",
+      "pre_snap_indicators": [
+        "One deep middle safety.",
+        "Corners/overhangs often align with receiver leverage consistent with man responsibilities.",
+        "Motion can help reveal defenders traveling with receivers."
+      ],
+      "post_snap_confirmation": [
+        "Coverage defenders carry receivers man-to-man.",
+        "Deep safety remains over the middle; a robber variant may cut intermediate routes."
+      ],
+      "stress_points": [
+        "crossers",
+        "out-breaking routes",
+        "pick/rub concepts",
+        "play action",
+        "matchup isolation"
+      ],
+      "risk_notes": [
+        "Robber/hole variants can punish blindly throwing in-breakers into the middle."
+      ],
+      "confidence": "high",
+      "sources": [
+        "usa_coverage",
+        "benkert_cfb26_coverages",
+        "benkert_cfb25_reads"
+      ]
+    },
+    "cover_2_man": {
+      "aliases": [
+        "cover 2 man",
+        "2 man",
+        "two man",
+        "man under"
+      ],
+      "family": "man",
+      "shell": "two_high",
+      "structure": "Two deep safeties over man coverage underneath.",
+      "pre_snap_indicators": [
+        "Two high safeties.",
+        "Underneath defenders aligned tightly enough to carry receivers in man."
+      ],
+      "post_snap_confirmation": [
+        "Underneath defenders turn and carry receivers rather than spot-dropping.",
+        "Two safeties remain high over the top."
+      ],
+      "stress_points": [
+        "underneath separation",
+        "crossers",
+        "QB scramble space if rush lanes open",
+        "option routes"
+      ],
+      "risk_notes": [
+        "Deep shots are capped by two safeties unless leverage is decisively won."
+      ],
+      "confidence": "high",
+      "sources": [
+        "benkert_cfb26_coverages",
+        "benkert_cfb25_reads"
+      ]
+    },
+    "cover_2": {
+      "aliases": [
+        "cover 2",
+        "two high zone",
+        "2 zone",
+        "cloud"
+      ],
+      "family": "zone",
+      "shell": "two_high",
+      "structure": "Two deep-half defenders with underneath defenders handling flats/hooks/curls.",
+      "pre_snap_indicators": [
+        "Two high safeties.",
+        "Corners may show flatter or squat leverage compared with quarters/man."
+      ],
+      "post_snap_confirmation": [
+        "Safeties divide the deep field into halves.",
+        "Corners/underneath defenders relate to flat and hook/curl zones."
+      ],
+      "stress_points": [
+        "vertical seams",
+        "smash/high-low",
+        "flood",
+        "deep middle",
+        "hole shots"
+      ],
+      "risk_notes": [
+        "Cover 2 Read/pattern-match variants can remove classic static-zone answers."
+      ],
+      "confidence": "high",
+      "sources": [
+        "usa_coverage",
+        "benkert_cfb26_coverages"
+      ]
+    },
+    "cover_3": {
+      "aliases": [
+        "cover 3",
+        "three deep",
+        "3 sky",
+        "3 buzz",
+        "3 cloud"
+      ],
+      "family": "zone_match",
+      "shell": "one_high",
+      "structure": "Three deep defenders divide the deep field into thirds with underneath zone/match responsibilities.",
+      "pre_snap_indicators": [
+        "Often presents one-high structure, though rotation can disguise it."
+      ],
+      "post_snap_confirmation": [
+        "Corners and middle safety form three deep thirds.",
+        "Four underneath defenders distribute curl/flat/hook areas in common variants."
+      ],
+      "stress_points": [
+        "flood",
+        "curl-flat",
+        "dig routes",
+        "four verticals/seams",
+        "horizontal stretch"
+      ],
+      "risk_notes": [
+        "Pattern-match Cover 3 variants can carry vertical routes differently from spot-drop Cover 3."
+      ],
+      "confidence": "high",
+      "sources": [
+        "usa_coverage",
+        "benkert_cfb26_coverages"
+      ]
+    },
+    "cover_4": {
+      "aliases": [
+        "cover 4",
+        "quarters",
+        "4 palms",
+        "quarters match"
+      ],
+      "family": "zone_match",
+      "shell": "two_high",
+      "structure": "Four deep defenders protect quarters of the field; many real systems pattern-match routes rather than spot-drop.",
+      "pre_snap_indicators": [
+        "Two-high shell with corners/safeties positioned to handle vertical threats."
+      ],
+      "post_snap_confirmation": [
+        "Both safeties remain involved vertically rather than rotating to a single-high middle.",
+        "Corners/safeties may match eligible vertical releases."
+      ],
+      "stress_points": [
+        "smash/high-low",
+        "flats",
+        "flood",
+        "play action/run conflict",
+        "underneath spacing"
+      ],
+      "risk_notes": [
+        "Do not assume static four-zone behavior; quarters rules frequently become man-like on vertical releases."
+      ],
+      "confidence": "high",
+      "sources": [
+        "usa_coverage",
+        "benkert_cfb26_coverages"
+      ]
+    },
+    "cover_6": {
+      "aliases": [
+        "cover 6",
+        "quarter quarter half",
+        "qqh",
+        "quarter-half"
+      ],
+      "family": "split_field_zone_match",
+      "shell": "two_high",
+      "structure": "Split-field coverage combining quarters principles to one side with Cover 2/half-field principles to the other.",
+      "pre_snap_indicators": [
+        "Usually presents a two-high shell; corner leverage may differ by side."
+      ],
+      "post_snap_confirmation": [
+        "One side behaves like quarters while the other behaves like a Cover 2 half.",
+        "Read the concept side independently rather than treating the coverage as symmetric."
+      ],
+      "stress_points": [
+        "formation into the weaker half",
+        "split-field high-low",
+        "seam leverage",
+        "boundary/field asymmetry"
+      ],
+      "risk_notes": [
+        "Advice must account for which side is quarters and which side is half-field; shell alone is insufficient."
+      ],
+      "confidence": "medium",
+      "sources": [
+        "benkert_cfb26_coverages"
+      ]
+    }
+  }
+}

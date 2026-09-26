@@ -1,0 +1,697 @@
+{
+  "metadata": {
+    "version": "0.1.0",
+    "purpose": "Concept/read-family knowledge for CFB 27 coordinator advice.",
+    "read_families": {
+      "progression": "Work a defined primary-secondary-checkdown order; coverage changes timing/availability more than the order.",
+      "defender_key": "Read a specific conflict defender and throw/run opposite his leverage or movement.",
+      "matchup": "Use pre/post-snap leverage to select a favorable isolated matchup.",
+      "combination": "Blend a progression with a defender key or matchup alert."
+    },
+    "decoder_links": {
+      "1": "pass_block",
+      "2": "run_block_or_run_action_block",
+      "3": "defensive_blitz_rush",
+      "5": "defensive_standard_pass_rush",
+      "40": "qb_dropback_pass_action",
+      "41": "qb_play_action",
+      "58": "rpo_or_run_ballcarrier_path",
+      "88": "glance_or_post_receiver_action",
+      "93": "screen_bubble_receiver_action",
+      "96": "slant_route_family",
+      "111": "qb_run_handoff_rpo_mesh_action",
+      "150": "mesh_cross_route_family"
+    },
+    "sources": {
+      "benkert_cfb26_coverages": {
+        "title": "How To Read EVERY Coverage In CFB 26!",
+        "creator": "Kurt Benkert",
+        "url": "https://www.youtube.com/watch?v=GiwfgE2oJMs",
+        "kind": "video",
+        "notes": "CFB-specific coverage identification and gameplay translation."
+      },
+      "benkert_cfb25_reads": {
+        "title": "The Easiest Way to Read a Defense in College Football 25",
+        "creator": "Kurt Benkert",
+        "url": "https://www.youtube.com/watch?v=vK692xeG5Rw",
+        "kind": "video",
+        "notes": "Pre-snap and post-snap reads in College Football 25."
+      },
+      "mckie_cfb25_rpos": {
+        "title": "Top 5 RPOs in EA College Football 25's Veer & Shoot Playbook",
+        "creator": "Coach McKie Plays",
+        "url": "https://www.youtube.com/watch?v=wk0iVF2tnek",
+        "kind": "video",
+        "notes": "CFB-specific RPO Alert Bubble Stick, Read Bubble, Glance Post, and Read Flat teaching."
+      },
+      "mckie_veer_shoot": {
+        "title": "Veer & Shoot / RPO teaching in NCAA College Football 25",
+        "creator": "Coach McKie Plays",
+        "url": "https://www.youtube.com/watch?v=BhzrODLvv9U",
+        "kind": "video",
+        "notes": "Veer & Shoot basics, RPO hitches, Alert Post ISO, and game-film adjustments."
+      },
+      "mckie_mesh": {
+        "title": "Coaching and Drilling the Mesh Concept: Featuring Coach McKie",
+        "creator": "3DownDevelopment / Coach McKie",
+        "url": "https://www.youtube.com/watch?v=HUQmDnwnrsM",
+        "kind": "video",
+        "notes": "Mesh spacing, receiver coverage reads, QB footwork and protection context."
+      },
+      "usa_coverage": {
+        "title": "Teach your quarterback how to read defenses",
+        "creator": "USA Football",
+        "url": "https://blogs.usafootball.com/blog/730/rcfamilies.com",
+        "kind": "article",
+        "notes": "Baseline structures and commonly attacked areas for Cover 1/2/3/4."
+      },
+      "xando_read_families": {
+        "title": "Using Read Families to Train QB Progressions",
+        "creator": "X&O Labs / Jeff DiSandro",
+        "url": "https://www.xandolabs.com/the-lab/position-groups/quarterback/pass-game-mechanics-quarterback/using-read-families-to-train-qb-progressions/",
+        "kind": "article",
+        "notes": "Progression reads, defender keys, matchups, and combination read families."
+      },
+      "xando_airraid_progressions": {
+        "title": "Adjusting Route Progressions in Air Raid Staples",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/offensive-systems/air-raid/adjusting-route-progressions-in-air-raid-staples/",
+        "kind": "article",
+        "notes": "Mesh, Flood, Smash, Spacing, Levels, Four Verticals and stable progression philosophy."
+      },
+      "xando_fourverts": {
+        "title": "Four Vertical Landmarks, Reads and Progressions",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/pass-game/vertical-pass-concepts/four-vertical-landmarks-reads-and-progressions/",
+        "kind": "article",
+        "notes": "Four-vertical landmarks, leverage adjustments and coverage-based progression variants."
+      },
+      "xando_mesh": {
+        "title": "Henderson State’s Flat Control Variations in the Mesh Concept",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/pass-game/intermediate-pass-concepts/henderson-states-flat-control-variations-in-the-mesh-concept/",
+        "kind": "article",
+        "notes": "Mesh as a man/zone answer with under/over mesh and flat-control progression variants."
+      },
+      "xando_flood": {
+        "title": "Protecting Two-Back Runs with Flood and Naked PAPs",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/personnel/12-21-personnel-concepts/protecting-two-back-runs-with-flood-and-naked-paps/",
+        "kind": "article",
+        "notes": "Flood progression example: deep-to-middle-to-short while stressing the flat defender."
+      },
+      "xando_stick": {
+        "title": "Using Stick and Spacing Play-Action Pass as Triple Option Schemes",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/personnel/20-personnel-concepts/using-stick-and-spacing-play-action-pass-as-triple-option-schemes/",
+        "kind": "article",
+        "notes": "Stick pre-snap gift and post-snap movement-key example; pressure answer."
+      },
+      "xando_stickdraw": {
+        "title": "RPOs: Case Two – Manipulating Box Defenders",
+        "creator": "X&O Labs",
+        "url": "https://www.xandolabs.com/the-lab/offense/rpos/post-snap-manipulations/rpos-case-two-manipulating-box-defenders/",
+        "kind": "article",
+        "notes": "Stick/Draw RPO structure and play-side linebacker conflict read."
+      }
+    }
+  },
+  "concepts": {
+    "mesh": {
+      "aliases": [
+        "mesh",
+        "mesh spot",
+        "mesh post",
+        "mesh wheel",
+        "mesh corner"
+      ],
+      "family": "crossing",
+      "read_family": "progression",
+      "primary_stress": [
+        "man traffic",
+        "underneath horizontal stretch",
+        "zone windows"
+      ],
+      "pre_snap_keys": [
+        "Identify likely man vs zone and obvious pressure.",
+        "Alert any isolated tagged route if leverage is favorable."
+      ],
+      "post_snap_guidance": [
+        "Against man, crossing traffic and separation are the main answer.",
+        "Against zone, do not blindly chase a runner into coverage; work the available sit/window and flat-control elements.",
+        "Move on quickly if the first mesh runner is capped."
+      ],
+      "coverage_fit": {
+        "cover_0": 3,
+        "cover_1": 3,
+        "cover_2_man": 3,
+        "cover_2": 1,
+        "cover_3": 1,
+        "cover_4": 1,
+        "cover_6": 1
+      },
+      "pressure": {
+        "fit": 2,
+        "note": "Crossers can provide fast answers, but protection and route timing still matter."
+      },
+      "assignment_ids": [
+        150
+      ],
+      "confidence": "high",
+      "sources": [
+        "mckie_mesh",
+        "xando_mesh",
+        "xando_airraid_progressions"
+      ]
+    },
+    "shallow": {
+      "aliases": [
+        "shallow",
+        "shallow cross",
+        "drive",
+        "drag"
+      ],
+      "family": "crossing",
+      "read_family": "progression",
+      "primary_stress": [
+        "underneath pursuit",
+        "linebacker depth",
+        "man trail"
+      ],
+      "pre_snap_keys": [
+        "Check middle-field structure and pressure.",
+        "Know which deeper in-breaking route is paired with the shallow."
+      ],
+      "post_snap_guidance": [
+        "Use the shallow as a fast man/separation answer.",
+        "Against zone, let underneath defenders declare and work the intermediate window if the shallow is capped."
+      ],
+      "coverage_fit": {
+        "cover_0": 3,
+        "cover_1": 3,
+        "cover_2_man": 2,
+        "cover_2": 1,
+        "cover_3": 2,
+        "cover_4": 1,
+        "cover_6": 1
+      },
+      "pressure": {
+        "fit": 2,
+        "note": "A shallow can become the fast outlet if it clears immediately."
+      },
+      "assignment_ids": [],
+      "confidence": "medium",
+      "sources": [
+        "xando_airraid_progressions"
+      ]
+    },
+    "flood": {
+      "aliases": [
+        "flood",
+        "sail",
+        "boot flood",
+        "levels flood"
+      ],
+      "family": "three_level_stretch",
+      "read_family": "progression",
+      "primary_stress": [
+        "flat defender",
+        "sideline vertical spacing",
+        "three-level zone stretch"
+      ],
+      "pre_snap_keys": [
+        "Choose/confirm the concept side and identify cloud/flat leverage."
+      ],
+      "post_snap_guidance": [
+        "Common teaching is deep-to-intermediate-to-short, but exact progression is system-specific.",
+        "Key the flat/overhang defender: widening or sinking changes which layer opens."
+      ],
+      "coverage_fit": {
+        "cover_0": 0,
+        "cover_1": 1,
+        "cover_2_man": 0,
+        "cover_2": 3,
+        "cover_3": 3,
+        "cover_4": 2,
+        "cover_6": 2
+      },
+      "pressure": {
+        "fit": 0,
+        "note": "Full progression can be slow versus immediate pressure unless a built-in outlet is available."
+      },
+      "assignment_ids": [],
+      "confidence": "high",
+      "sources": [
+        "usa_coverage",
+        "xando_flood",
+        "xando_airraid_progressions"
+      ]
+    },
+    "smash": {
+      "aliases": [
+        "smash",
+        "hitch corner",
+        "corner hitch",
+        "inverted smash"
+      ],
+      "family": "high_low",
+      "read_family": "defender_key",
+      "primary_stress": [
+        "corner/flat defender",
+        "two-high sideline space"
+      ],
+      "pre_snap_keys": [
+        "Identify two-high/cloud looks and corner leverage."
+      ],
+      "post_snap_guidance": [
+        "High-low the corner/flat player rather than pre-determining the hitch or corner.",
+        "If the defense carries/squats differently than static Cover 2, confirm leverage before throwing."
+      ],
+      "coverage_fit": {
+        "cover_0": 0,
+        "cover_1": 1,
+        "cover_2_man": 0,
+        "cover_2": 3,
+        "cover_3": 1,
+        "cover_4": 3,
+        "cover_6": 2
+      },
+      "pressure": {
+        "fit": 0,
+        "note": "The underneath component can be quick, but the corner route may not have time versus pressure."
+      },
+      "assignment_ids": [],
+      "confidence": "high",
+      "sources": [
+        "usa_coverage",
+        "xando_airraid_progressions"
+      ]
+    },
+    "four_verticals": {
+      "aliases": [
+        "four verticals",
+        "4 verts",
+        "four verts",
+        "verticals",
+        "all go"
+      ],
+      "family": "vertical_stretch",
+      "read_family": "combination",
+      "primary_stress": [
+        "seams",
+        "deep safety spacing",
+        "corner leverage"
+      ],
+      "pre_snap_keys": [
+        "Count deep safeties/open vs closed middle.",
+        "Check isolated outside leverage and press/off depth."
+      ],
+      "post_snap_guidance": [
+        "Confirm safety rotation before committing to a seam.",
+        "Outside and inside verticals can adjust to leverage in many systems; exact tags are playbook-specific.",
+        "Against three-deep structures, seams can stress the spacing between deep-third defenders."
+      ],
+      "coverage_fit": {
+        "cover_0": 1,
+        "cover_1": 2,
+        "cover_2_man": 1,
+        "cover_2": 3,
+        "cover_3": 3,
+        "cover_4": 0,
+        "cover_6": 2
+      },
+      "pressure": {
+        "fit": -1,
+        "note": "Vertical routes need time; use only if protection or an immediate leverage throw is present."
+      },
+      "assignment_ids": [
+        98,
+        141
+      ],
+      "confidence": "high",
+      "sources": [
+        "usa_coverage",
+        "xando_fourverts",
+        "xando_airraid_progressions"
+      ]
+    },
+    "slants": {
+      "aliases": [
+        "slants",
+        "quick slants",
+        "double slants",
+        "slant flat"
+      ],
+      "family": "quick_in_breaking",
+      "read_family": "defender_key",
+      "primary_stress": [
+        "inside leverage",
+        "underneath windows",
+        "quick man separation"
+      ],
+      "pre_snap_keys": [
+        "Check press/off leverage and inside help.",
+        "Identify potential robber/hole defender."
+      ],
+      "post_snap_guidance": [
+        "Confirm the throwing lane; do not throw blindly into a robber/hole player.",
+        "Versus pressure/man, favor immediate separation and leverage."
+      ],
+      "coverage_fit": {
+        "cover_0": 3,
+        "cover_1": 2,
+        "cover_2_man": 2,
+        "cover_2": 1,
+        "cover_3": 1,
+        "cover_4": 1,
+        "cover_6": 1
+      },
+      "pressure": {
+        "fit": 3,
+        "note": "Quick timing can punish pressure when the throwing lane is clean."
+      },
+      "assignment_ids": [
+        96
+      ],
+      "confidence": "high",
+      "sources": [
+        "benkert_cfb25_reads"
+      ]
+    },
+    "stick_spacing": {
+      "aliases": [
+        "stick",
+        "spacing",
+        "stick spacing",
+        "stick flat",
+        "stick draw"
+      ],
+      "family": "quick_triangle",
+      "read_family": "defender_key",
+      "primary_stress": [
+        "flat/overhang defender",
+        "hook player",
+        "short-area spacing"
+      ],
+      "pre_snap_keys": [
+        "Take a free gift hitch if the defense concedes it.",
+        "Identify the underneath movement/conflict defender."
+      ],
+      "post_snap_guidance": [
+        "If the key widens, the inside stick/window can open.",
+        "If the key squeezes/brackets inside, reset to the flat/high-low component.",
+        "Against blitz, the slot/stick can become an immediate answer in systems that teach that rule."
+      ],
+      "coverage_fit": {
+        "cover_0": 2,
+        "cover_1": 1,
+        "cover_2_man": 1,
+        "cover_2": 2,
+        "cover_3": 2,
+        "cover_4": 2,
+        "cover_6": 2
+      },
+      "pressure": {
+        "fit": 3,
+        "note": "Quick-game structure often provides an immediate answer."
+      },
+      "assignment_ids": [],
+      "confidence": "high",
+      "sources": [
+        "xando_stick",
+        "xando_stickdraw",
+        "xando_read_families"
+      ]
+    },
+    "screen_bubble": {
+      "aliases": [
+        "bubble",
+        "screen",
+        "wr screen",
+        "jailbreak screen",
+        "quick screen"
+      ],
+      "family": "perimeter_screen",
+      "read_family": "defender_key",
+      "primary_stress": [
+        "numbers",
+        "perimeter leverage",
+        "overhang alignment"
+      ],
+      "pre_snap_keys": [
+        "Count blockers vs immediate perimeter defenders.",
+        "Check cushion and overhang leverage."
+      ],
+      "post_snap_guidance": [
+        "Get the ball out immediately if the numbers/leverage remain favorable.",
+        "Abort/avoid if the defense has clearly out-leveraged the screen."
+      ],
+      "coverage_fit": {
+        "cover_0": 0,
+        "cover_1": 1,
+        "cover_2_man": 0,
+        "cover_2": 1,
+        "cover_3": 1,
+        "cover_4": 1,
+        "cover_6": 1
+      },
+      "pressure": {
+        "fit": 2,
+        "note": "Can punish interior pressure if perimeter numbers are favorable."
+      },
+      "assignment_ids": [
+        93
+      ],
+      "confidence": "high",
+      "sources": [
+        "mckie_cfb25_rpos",
+        "mckie_veer_shoot"
+      ]
+    },
+    "rpo_glance_post": {
+      "aliases": [
+        "rpo glance",
+        "rpo glance post",
+        "alert glance",
+        "alert post",
+        "rpo alert post iso"
+      ],
+      "family": "rpo",
+      "read_family": "defender_key",
+      "primary_stress": [
+        "box safety/conflict defender",
+        "inside run fit",
+        "glance/post window"
+      ],
+      "pre_snap_keys": [
+        "Count the box and locate the safety/overhang responsible for fitting the run and closing the glance window.",
+        "Check receiver leverage before treating the glance as available."
+      ],
+      "post_snap_guidance": [
+        "Key the designated conflict defender; run/pass choice is tied to whether he inserts into the run fit or stays in the throwing window.",
+        "Do not assume every similarly named RPO uses the exact same read player; confirm playbook implementation."
+      ],
+      "coverage_fit": {
+        "cover_0": 1,
+        "cover_1": 2,
+        "cover_2_man": 1,
+        "cover_2": 1,
+        "cover_3": 2,
+        "cover_4": 2,
+        "cover_6": 2
+      },
+      "pressure": {
+        "fit": 1,
+        "note": "Can exploit an inserting conflict defender, but an unblocked pressure player can also force a fast decision."
+      },
+      "assignment_ids": [
+        111,
+        58,
+        88,
+        2
+      ],
+      "confidence": "high",
+      "sources": [
+        "mckie_cfb25_rpos",
+        "mckie_veer_shoot"
+      ]
+    },
+    "rpo_bubble": {
+      "aliases": [
+        "rpo bubble",
+        "rpo alert bubble",
+        "rpo read bubble",
+        "rpo alert bubble stick"
+      ],
+      "family": "rpo",
+      "read_family": "defender_key",
+      "primary_stress": [
+        "box count",
+        "apex/overhang conflict",
+        "perimeter numbers"
+      ],
+      "pre_snap_keys": [
+        "Count the box and perimeter defenders.",
+        "Identify the apex/overhang who can be conflicted by run fit vs bubble responsibility."
+      ],
+      "post_snap_guidance": [
+        "If the conflict defender commits into the run fit and the perimeter numbers hold, the bubble becomes available.",
+        "If he widens/holds outside leverage, stay with the run side of the read when the box remains favorable."
+      ],
+      "coverage_fit": {
+        "cover_0": 0,
+        "cover_1": 1,
+        "cover_2_man": 0,
+        "cover_2": 1,
+        "cover_3": 2,
+        "cover_4": 2,
+        "cover_6": 2
+      },
+      "pressure": {
+        "fit": 2,
+        "note": "The conflict read can punish an inserting overhang, but pressure source/location matters."
+      },
+      "assignment_ids": [
+        111,
+        93,
+        2
+      ],
+      "confidence": "high",
+      "sources": [
+        "mckie_cfb25_rpos",
+        "mckie_veer_shoot"
+      ]
+    },
+    "inside_zone": {
+      "aliases": [
+        "inside zone",
+        "zone",
+        "split zone"
+      ],
+      "family": "run",
+      "read_family": "defender_key",
+      "primary_stress": [
+        "box count",
+        "interior gaps",
+        "second-level flow"
+      ],
+      "pre_snap_keys": [
+        "Count the box and identify extra fitters.",
+        "Prefer favorable numbers or pair with an RPO/constraint when overloaded."
+      ],
+      "post_snap_guidance": [
+        "Press the designed track and react to leverage/cutback rather than bouncing automatically."
+      ],
+      "coverage_fit": {},
+      "pressure": {
+        "fit": 1,
+        "note": "Pressure can create penetration or vacated space; front and box count matter more than coverage label."
+      },
+      "assignment_ids": [
+        2,
+        111
+      ],
+      "confidence": "medium",
+      "sources": [
+        "mckie_cfb25_rpos"
+      ]
+    },
+    "outside_zone": {
+      "aliases": [
+        "outside zone",
+        "wide zone",
+        "stretch"
+      ],
+      "family": "run",
+      "read_family": "defender_key",
+      "primary_stress": [
+        "edge leverage",
+        "horizontal pursuit",
+        "cutback lanes"
+      ],
+      "pre_snap_keys": [
+        "Check edge numbers and force-player alignment."
+      ],
+      "post_snap_guidance": [
+        "Stretch the front and take the available lane; avoid predetermining bounce vs cutback."
+      ],
+      "coverage_fit": {},
+      "pressure": {
+        "fit": 0,
+        "note": "Edge pressure/penetration can disrupt the track; alignment matters more than coverage."
+      },
+      "assignment_ids": [
+        2
+      ],
+      "confidence": "medium",
+      "sources": []
+    },
+    "counter": {
+      "aliases": [
+        "counter",
+        "gt counter",
+        "counter y",
+        "counter read"
+      ],
+      "family": "gap_run",
+      "read_family": "defender_key",
+      "primary_stress": [
+        "flow misdirection",
+        "puller leverage",
+        "backside pursuit"
+      ],
+      "pre_snap_keys": [
+        "Identify front structure and likely spill/box player."
+      ],
+      "post_snap_guidance": [
+        "Follow puller leverage and avoid outrunning the blocking picture."
+      ],
+      "coverage_fit": {},
+      "pressure": {
+        "fit": 0,
+        "note": "Run blitzes can disrupt pull timing; front is more important than coverage shell."
+      },
+      "assignment_ids": [
+        2,
+        111
+      ],
+      "confidence": "medium",
+      "sources": []
+    },
+    "read_option": {
+      "aliases": [
+        "read option",
+        "zone read",
+        "option",
+        "veer",
+        "qb read"
+      ],
+      "family": "option_run",
+      "read_family": "defender_key",
+      "primary_stress": [
+        "unblocked read defender",
+        "edge numbers",
+        "pursuit discipline"
+      ],
+      "pre_snap_keys": [
+        "Identify the read defender and force/pitch relationship when applicable."
+      ],
+      "post_snap_guidance": [
+        "Give/keep based on the read defender's commitment; do not decide solely from the pre-snap picture."
+      ],
+      "coverage_fit": {},
+      "pressure": {
+        "fit": 1,
+        "note": "An aggressive edge can be manipulated if he is the read player; extra pressure elsewhere can change the equation."
+      },
+      "assignment_ids": [
+        111,
+        2
+      ],
+      "confidence": "medium",
+      "sources": [
+        "xando_stickdraw"
+      ]
+    }
+  }
+}

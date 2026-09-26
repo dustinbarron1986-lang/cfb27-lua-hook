@@ -64,6 +64,7 @@ Options:
   --game-dir <path>       College Football 27 directory
   --mmc-dir <path>        Madden Modding Community manager directory
   --artifacts-dir <path>  Built hook DLL directory
+  --autorun-script <path> Lua script copied to the installed autorun path (install only)
   --json                  Emit one JSON object
   --follow                Follow new log events as JSONL with --json
   --after <cursor>        Start event reads after this cursor
@@ -366,11 +367,13 @@ async function main(argv, {
         options.artifactsDir || env.CFB27_HOOK_ARTIFACTS,
         '--artifacts-dir',
       );
+      const autorunScript = options.autorunScript || env.CFB27_AUTORUN_SCRIPT;
       result = await sdk.installHook({
         gameDir,
         mmcDir,
         proxyDll: path.resolve(artifactsDir, 'cfb27_cryptbase_proxy.dll'),
         hostDll: path.resolve(artifactsDir, 'cfb27_lua_host.dll'),
+        ...(autorunScript ? { autorunScript: path.resolve(cwd, autorunScript) } : {}),
       });
     } else if (command === 'uninstall') {
       if (positionals.length) throw usageError('uninstall does not accept positional arguments');

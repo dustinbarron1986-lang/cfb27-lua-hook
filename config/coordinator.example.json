@@ -1,0 +1,6 @@
+{
+  "offensePlaybook": "data/playbooks/offense/pro-style.sample.json",
+  "defensePlaybook": "data/playbooks/defense/3-4-zone-pressure.sample.json",
+  "pollMs": 250,
+  "notes": "MVP uses sample playbooks until your actual active CFB playbooks are mapped into runtime JSON. Pre-call offensive ranking never uses the current exact defensive call."
+}

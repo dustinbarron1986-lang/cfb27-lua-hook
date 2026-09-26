@@ -1,0 +1,52 @@
+{
+  "id": "pro-style",
+  "name": "Pro Style",
+  "side": "OFFENSE",
+  "status": "sample-only",
+  "plays": [
+    {
+      "id": "i-pro-hb-duo",
+      "formation": "I Form Pro",
+      "personnel": "21",
+      "name": "HB Duo",
+      "type": "RUN",
+      "concepts": [
+        "duo",
+        "interior_run",
+        "downhill"
+      ],
+      "presentationFamily": "i_pro_downhill"
+    },
+    {
+      "id": "i-pro-pa-boot",
+      "formation": "I Form Pro",
+      "personnel": "21",
+      "name": "PA Boot",
+      "type": "PASS",
+      "concepts": [
+        "play_action",
+        "boot",
+        "crossers"
+      ],
+      "presentationFamily": "i_pro_run_action",
+      "setupBy": [
+        "outside_zone",
+        "stretch",
+        "interior_run"
+      ]
+    },
+    {
+      "id": "i-pro-mesh",
+      "formation": "I Form Pro",
+      "personnel": "21",
+      "name": "Mesh",
+      "type": "PASS",
+      "concepts": [
+        "mesh",
+        "crossers",
+        "man_beater",
+        "quick_intermediate"
+      ]
+    }
+  ]
+}

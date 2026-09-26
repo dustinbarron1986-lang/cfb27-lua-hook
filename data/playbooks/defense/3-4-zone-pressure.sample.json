@@ -1,0 +1,32 @@
+{
+  "id": "3-4-zone-pressure",
+  "name": "3-4 Zone Pressure",
+  "side": "DEFENSE",
+  "status": "sample-only",
+  "plays": [
+    {
+      "id": "nickel-dbl-mug-cover3-match",
+      "formation": "Nickel 2-4 Dbl Mug",
+      "personnel": "4-2-5",
+      "name": "Cover 3 Match",
+      "type": "COVERAGE",
+      "concepts": [
+        "cover_3",
+        "match",
+        "single_high"
+      ]
+    },
+    {
+      "id": "nickel-dbl-mug-mid-blitz",
+      "formation": "Nickel 2-4 Dbl Mug",
+      "personnel": "4-2-5",
+      "name": "Mid Blitz",
+      "type": "BLITZ",
+      "concepts": [
+        "pressure",
+        "mug_front",
+        "man_pressure"
+      ]
+    }
+  ]
+}
