@@ -80,11 +80,16 @@ function compactRuntimeIndex(compiled) {
     }
 
     const players = entry.players.map(player => {
-      const assignmentKey = player.positionAssignId != null
-        ? stableKey('assignment', player.positionAssignId)
-        : player.assignmentAssetPath
-          ? stableKey('assignment-path', player.assignmentAssetPath)
-          : null;
+      const assignmentIdentity = player.assignmentAssetPath
+        ? [
+            player.assignmentAssetPath,
+            player.assignmentPartitionGuid || '',
+            player.assignmentGuid || '',
+          ].join('|')
+        : null;
+      const assignmentKey = assignmentIdentity
+        ? stableKey('assignment', assignmentIdentity)
+        : null;
 
       if (
         assignmentKey &&
