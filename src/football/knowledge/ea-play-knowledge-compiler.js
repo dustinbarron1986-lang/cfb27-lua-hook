@@ -1,5 +1,13 @@
 'use strict';
 
+const PROVENANCE = Object.freeze({
+  EA_AUTHORED: 'EA_AUTHORED',
+  RUNTIME_OBSERVED: 'RUNTIME_OBSERVED',
+  VERIFIED_MANUAL: 'VERIFIED_MANUAL',
+  DERIVED_STRUCTURAL: 'DERIVED_STRUCTURAL',
+  HEURISTIC: 'HEURISTIC',
+});
+
 function normalizeGuid(value) {
   return value == null ? null : String(value).trim().toLowerCase();
 }
@@ -7,7 +15,7 @@ function normalizeGuid(value) {
 function normalizeAssetPath(value) {
   return value == null
     ? null
-    : String(value).trim().replace(/\\/g, '/').replace(/\.xml$/i, '').toLowerCase();
+    : String(value).trim().replace(/\\/g, '/').replace(/\.xml$/i, '').replace(/\/+$/g, '').toLowerCase();
 }
 
 function flattenAssignmentRecords(data) {
@@ -41,48 +49,72 @@ function createAssetIndex(records = []) {
     if (partitionGuid && primaryGuid) pushIndex(byPair, `${partitionGuid}|${primaryGuid}`, record);
   }
 
-  return { byPath, byPartitionGuid, byPrimaryGuid, byPair };
+  return { records, byPath, byPartitionGuid, byPrimaryGuid, byPair };
 }
 
 function unique(list) {
   return Array.isArray(list) && list.length === 1 ? list[0] : null;
 }
 
+function identityFor(record) {
+  return {
+    assetPath: normalizeAssetPath(record?.assetPath || record?.name),
+    partitionGuid: normalizeGuid(record?.partitionGuid),
+    ref: normalizeGuid(record?.primaryGuid),
+  };
+}
+
+function refIdentity(ref) {
+  return {
+    assetPath: normalizeAssetPath(ref?.assetPath),
+    partitionGuid: normalizeGuid(ref?.partitionGuid),
+    ref: normalizeGuid(ref?.ref),
+  };
+}
+
+function matchesIdentity(record, identity) {
+  const actual = identityFor(record);
+  if (identity.assetPath && actual.assetPath !== identity.assetPath) return false;
+  if (identity.partitionGuid && actual.partitionGuid !== identity.partitionGuid) return false;
+  if (identity.ref && actual.ref !== identity.ref) return false;
+  return true;
+}
+
 function resolveReference(ref, index) {
-  if (!ref || !index) return { record: null, status: 'missing_reference' };
-  const assetPath = normalizeAssetPath(ref.assetPath);
-  const partitionGuid = normalizeGuid(ref.partitionGuid);
-  const instanceGuid = normalizeGuid(ref.ref);
+  if (!ref || !index) return { record: null, status: 'missing_reference', exact: false };
 
-  if (assetPath) {
-    const exact = unique(index.byPath.get(assetPath));
-    if (exact) return { record: exact, status: 'resolved_asset_path', exact: true };
-    const matches = index.byPath.get(assetPath) || [];
-    if (matches.length > 1) return { record: null, status: 'ambiguous_asset_path', candidates: matches };
+  const identity = refIdentity(ref);
+  const provided = Object.values(identity).filter(Boolean).length;
+  if (!provided) return { record: null, status: 'missing_reference_identity', exact: false, ref };
+
+  const candidates = (index.records || []).filter(record => matchesIdentity(record, identity));
+  if (candidates.length === 1) {
+    const status = provided === 3
+      ? 'resolved_exact_identity'
+      : provided === 2
+        ? 'resolved_partial_identity'
+        : 'resolved_single_identity';
+    return { record: candidates[0], status, exact: provided === 3, identity };
+  }
+  if (candidates.length > 1) {
+    return { record: null, status: 'ambiguous_identity', exact: false, identity, candidates };
   }
 
-  if (partitionGuid && instanceGuid) {
-    const exact = unique(index.byPair.get(`${partitionGuid}|${instanceGuid}`));
-    if (exact) return { record: exact, status: 'resolved_partition_instance', exact: true };
-    const matches = index.byPair.get(`${partitionGuid}|${instanceGuid}`) || [];
-    if (matches.length > 1) return { record: null, status: 'ambiguous_partition_instance', candidates: matches };
-  }
+  const componentMatches = {
+    assetPath: identity.assetPath ? (index.byPath.get(identity.assetPath) || []).length : 0,
+    partitionGuid: identity.partitionGuid ? (index.byPartitionGuid.get(identity.partitionGuid) || []).length : 0,
+    ref: identity.ref ? (index.byPrimaryGuid.get(identity.ref) || []).length : 0,
+  };
+  const anyComponentMatch = Object.values(componentMatches).some(count => count > 0);
 
-  if (instanceGuid) {
-    const exact = unique(index.byPrimaryGuid.get(instanceGuid));
-    if (exact) return { record: exact, status: 'resolved_primary_guid', exact: true };
-    const matches = index.byPrimaryGuid.get(instanceGuid) || [];
-    if (matches.length > 1) return { record: null, status: 'ambiguous_primary_guid', candidates: matches };
-  }
-
-  if (partitionGuid) {
-    const exact = unique(index.byPartitionGuid.get(partitionGuid));
-    if (exact) return { record: exact, status: 'resolved_partition_guid', exact: true };
-    const matches = index.byPartitionGuid.get(partitionGuid) || [];
-    if (matches.length > 1) return { record: null, status: 'ambiguous_partition_guid', candidates: matches };
-  }
-
-  return { record: null, status: 'unresolved_reference', ref };
+  return {
+    record: null,
+    status: anyComponentMatch ? 'identity_mismatch' : 'unresolved_reference',
+    exact: false,
+    identity,
+    componentMatches,
+    ref,
+  };
 }
 
 function startingAlignment(setRecord, index) {
@@ -98,11 +130,21 @@ function normalizedAssignment(record) {
     assignmentPartitionGuid: record.partitionGuid || null,
     positionAssignId: record.positionAssignId ?? null,
     routeType: record.routeType || null,
+    assignmentActions: record.actions || [],
     assignmentSemantics: record.semantics || null,
     assignmentName: record.shortName || null,
     assignmentCategory: record.category || null,
-    source: 'ea',
+    assignmentSourceFile: record.sourceFile || null,
+    source: PROVENANCE.EA_AUTHORED,
   };
+}
+
+function isResolvedStatus(status) {
+  return /^resolved_/.test(String(status || ''));
+}
+
+function isSpecialTeamsRef(ref) {
+  return /\/assignments\/specialteams\//i.test(String(ref?.assetPath || ''));
 }
 
 function compileResolvedPlay(play, context) {
@@ -110,12 +152,13 @@ function compileResolvedPlay(play, context) {
   const setRecord = setResolution.record;
   const formationResolution = setRecord
     ? resolveReference(setRecord.formationRef, context.formations)
-    : { record: null, status: 'set_unresolved' };
+    : { record: null, status: 'set_unresolved', exact: false };
   const formationRecord = formationResolution.record;
 
   const players = (play.positionAssignmentDefines || []).map((assignmentRef, index) => {
     const resolution = resolveReference(assignmentRef, context.assignments);
     const assignment = normalizedAssignment(resolution.record);
+    const specialTeams = !assignment && isSpecialTeamsRef(assignmentRef);
     return {
       index,
       startingAlignment: startingAlignment(setRecord, index),
@@ -130,23 +173,30 @@ function compileResolvedPlay(play, context) {
         assignmentPartitionGuid: assignmentRef.partitionGuid || null,
         positionAssignId: null,
         routeType: null,
+        assignmentActions: [],
         assignmentSemantics: null,
         assignmentName: null,
-        assignmentCategory: null,
-        source: 'ea',
+        assignmentCategory: specialTeams ? 'SpecialTeams' : null,
+        assignmentSourceFile: null,
+        source: PROVENANCE.EA_AUTHORED,
       }),
-      resolutionStatus: resolution.status,
-      source: 'ea',
+      resolutionStatus: specialTeams ? 'unresolved_special_teams' : resolution.status,
+      specialTeamsUnresolved: specialTeams,
+      source: PROVENANCE.EA_AUTHORED,
     };
   });
 
-  const unresolvedAssignments = players.filter(player =>
-    /^unresolved|^ambiguous|^missing/.test(player.resolutionStatus || '') ||
-    (player.positionAssignId == null && !player.assignmentAssetPath)
-  ).length;
+  const unresolvedPlayers = players.filter(player => !isResolvedStatus(player.resolutionStatus));
+  const specialTeamsUnresolved = unresolvedPlayers.filter(player => player.specialTeamsUnresolved).length;
+  const normalOffenseUnresolved = unresolvedPlayers.length - specialTeamsUnresolved;
+  const resolutionStatus = normalOffenseUnresolved > 0
+    ? 'unresolved_normal_offense'
+    : specialTeamsUnresolved > 0
+      ? 'partial_special_teams'
+      : 'fully_resolved';
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     formation: formationRecord ? {
       name: formationRecord.name,
       formId: formationRecord.formId,
@@ -154,7 +204,7 @@ function compileResolvedPlay(play, context) {
       assetPath: formationRecord.assetPath,
       partitionGuid: formationRecord.partitionGuid || null,
       primaryGuid: formationRecord.primaryGuid || null,
-      source: 'ea',
+      source: PROVENANCE.EA_AUTHORED,
     } : null,
     set: setRecord ? {
       name: setRecord.name,
@@ -167,7 +217,7 @@ function compileResolvedPlay(play, context) {
       packages: setRecord.packages || [],
       partitionGuid: setRecord.partitionGuid || null,
       primaryGuid: setRecord.primaryGuid || null,
-      source: 'ea',
+      source: PROVENANCE.EA_AUTHORED,
     } : null,
     play: {
       name: play.name || play.playName,
@@ -191,23 +241,26 @@ function compileResolvedPlay(play, context) {
       passMedium: play.passMedium ?? null,
       passLong: play.passLong ?? null,
       rawMetadata: play.rawMetadata || null,
-      source: 'ea',
+      source: PROVENANCE.EA_AUTHORED,
     },
     players,
     provenance: {
-      formation: formationRecord ? 'ea_asset' : 'unresolved',
-      set: setRecord ? 'ea_asset' : 'unresolved',
-      play: 'ea_asset',
-      assignments: 'ea_asset',
-      progression: 'not_authored_here',
+      formation: formationRecord ? PROVENANCE.EA_AUTHORED : 'UNRESOLVED',
+      set: setRecord ? PROVENANCE.EA_AUTHORED : 'UNRESOLVED',
+      play: PROVENANCE.EA_AUTHORED,
+      assignments: PROVENANCE.EA_AUTHORED,
+      progression: PROVENANCE.DERIVED_STRUCTURAL,
     },
     resolution: {
+      status: resolutionStatus,
       formation: formationResolution.status,
       set: setResolution.status,
       expectedPlayerAssignments: 11,
       actualPlayerAssignmentRefs: players.length,
-      resolvedPlayerAssignments: players.filter(player => !/^unresolved|^ambiguous|^missing/.test(player.resolutionStatus || '')).length,
-      unresolvedPlayerAssignments: unresolvedAssignments,
+      resolvedPlayerAssignments: players.filter(player => isResolvedStatus(player.resolutionStatus)).length,
+      unresolvedPlayerAssignments: unresolvedPlayers.length,
+      unresolvedNormalOffenseAssignments: normalOffenseUnresolved,
+      unresolvedSpecialTeamsAssignments: specialTeamsUnresolved,
     },
   };
 }
@@ -221,40 +274,77 @@ function compileEaPlayKnowledge({ formations = [], sets = [], plays = [], assign
   };
   const compiled = plays.map(play => compileResolvedPlay(play, context));
   const unresolved = [];
+  let assignmentRefCount = 0;
+  let resolvedAssignmentRefCount = 0;
+  let unresolvedNormalOffenseRefCount = 0;
+  let unresolvedSpecialTeamsRefCount = 0;
+
   for (const entry of compiled) {
-    if (!entry.formation || !entry.set || entry.resolution.actualPlayerAssignmentRefs !== 11 || entry.resolution.unresolvedPlayerAssignments) {
+    assignmentRefCount += entry.resolution.actualPlayerAssignmentRefs;
+    resolvedAssignmentRefCount += entry.resolution.resolvedPlayerAssignments;
+    unresolvedNormalOffenseRefCount += entry.resolution.unresolvedNormalOffenseAssignments;
+    unresolvedSpecialTeamsRefCount += entry.resolution.unresolvedSpecialTeamsAssignments;
+
+    if (
+      !entry.formation ||
+      !entry.set ||
+      entry.resolution.actualPlayerAssignmentRefs !== 11 ||
+      entry.resolution.unresolvedPlayerAssignments
+    ) {
       unresolved.push({
         play: entry.play.assetPath || entry.play.name,
+        resolutionStatus: entry.resolution.status,
         formationStatus: entry.resolution.formation,
         setStatus: entry.resolution.set,
         assignmentRefs: entry.resolution.actualPlayerAssignmentRefs,
         resolvedAssignments: entry.resolution.resolvedPlayerAssignments,
         unresolvedAssignments: entry.resolution.unresolvedPlayerAssignments,
+        unresolvedNormalOffenseAssignments: entry.resolution.unresolvedNormalOffenseAssignments,
+        unresolvedSpecialTeamsAssignments: entry.resolution.unresolvedSpecialTeamsAssignments,
+        unresolvedRefs: entry.players
+          .filter(player => !isResolvedStatus(player.resolutionStatus))
+          .map(player => ({
+            index: player.index,
+            status: player.resolutionStatus,
+            assetPath: player.assignmentRef.assetPath,
+            partitionGuid: player.assignmentRef.partitionGuid,
+            ref: player.assignmentRef.ref,
+          })),
       });
     }
   }
 
+  const fullyResolvedPlayCount = compiled.filter(entry => entry.resolution.status === 'fully_resolved').length;
+  const partiallyResolvedPlayCount = compiled.filter(entry => entry.resolution.status === 'partial_special_teams').length;
+  const unresolvedNormalOffensePlayCount = compiled.filter(entry => entry.resolution.status === 'unresolved_normal_offense').length;
+
   return {
     metadata: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       source: 'EA Frostbite Formation/Set/Play + PositionAssignment assets',
       formationCount: formations.length,
       setCount: sets.length,
       playCount: plays.length,
       assignmentRecordCount: assignmentRecords.length,
       compiledPlayCount: compiled.length,
-      fullyResolvedPlayCount: compiled.length - unresolved.length,
+      assignmentRefCount,
+      resolvedAssignmentRefCount,
+      unresolvedAssignmentRefCount: assignmentRefCount - resolvedAssignmentRefCount,
+      assignmentResolutionPercentage: assignmentRefCount
+        ? Number(((resolvedAssignmentRefCount / assignmentRefCount) * 100).toFixed(4))
+        : 0,
+      fullyResolvedPlayCount,
+      partiallyResolvedPlayCount,
+      unresolvedNormalOffensePlayCount,
       unresolvedPlayCount: unresolved.length,
-      provenanceHierarchy: [
-        'ea_extracted_asset_data',
-        'verified_runtime_telemetry',
-        'verified_manual_knowledge',
-        'structurally_derived_coordinator_inference',
-        'generic_football_heuristics',
-      ],
+      unresolvedNormalOffenseRefCount,
+      unresolvedSpecialTeamsRefCount,
+      provenanceHierarchy: Object.values(PROVENANCE),
       notes: [
         'Legacy flattened playbook assignment numbers are never used to resolve PositionAssignmentDefine.positionAssignId.',
+        'External assignment references are resolved by all available authoritative identity fields; conflicting path/GUID values are rejected.',
         'PlayPassData percentage is preserved as EA-authored metadata and is not treated as an exact QB read progression.',
+        'SpecialTeams corpus gaps are classified separately and do not reduce normal-offense authority.',
       ],
     },
     plays: compiled,
@@ -263,10 +353,13 @@ function compileEaPlayKnowledge({ formations = [], sets = [], plays = [], assign
 }
 
 module.exports = {
+  PROVENANCE,
   normalizeAssetPath,
   flattenAssignmentRecords,
   createAssetIndex,
   resolveReference,
+  isResolvedStatus,
+  isSpecialTeamsRef,
   compileResolvedPlay,
   compileEaPlayKnowledge,
 };
