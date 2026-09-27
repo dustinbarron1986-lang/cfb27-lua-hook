@@ -93,13 +93,15 @@ test('assignment store does not silently choose conflicting duplicate IDs', () =
   assert.equal(resolved.record, null);
 });
 
-test('play art translates EA-relative route geometry from receiver alignment', () => {
+test('play art keeps authoritative positionAssignId separate from legacy assignment numbers', () => {
   const drag = record(DRAG_XML);
   const art = buildPassingPlayArt([
-    { button: 'X', x: -12, y: 0, assignment: 2044271394, eaAssignment: drag }
+    { button: 'X', x: -12, y: 0, assignment: 88, eaAssignment: drag }
   ]);
   assert.equal(art.source, 'ea_assignment_geometry');
   assert.equal(art.targets.length, 1);
+  assert.equal(art.targets[0].assignmentId, 2044271394);
+  assert.equal(art.targets[0].legacyAssignmentId, 88);
   assert.equal(art.targets[0].geometry.points[0].x, -12);
   assert.equal(art.timingCalibrated, false);
 });
