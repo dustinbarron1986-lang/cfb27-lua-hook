@@ -47,6 +47,12 @@ function tripleKey(formationName, setName, playName) {
   return formation && set && play ? `${formation}\u0000${set}\u0000${play}` : null;
 }
 
+function setPlayKey(setName, playName) {
+  const set = normalizeStructuralValue(setName);
+  const play = normalizeStructuralValue(playName);
+  return set && play ? `${set}\u0000${play}` : null;
+}
+
 function presentationPlayKey(presentation, playName) {
   const structural = normalizeStructuralValue(presentation);
   const play = normalizeStructuralValue(playName);
@@ -62,6 +68,7 @@ class EaPlayKnowledgeStore {
     this.document = null;
     this.state = { available: false, reason: 'not_loaded', error: null };
     this.byTriple = new Map();
+    this.bySetPlay = new Map();
     this.byPresentationPlay = new Map();
     this.byAuthoredPlayId = new Map();
 
@@ -100,6 +107,9 @@ class EaPlayKnowledgeStore {
       const triple = tripleKey(formation?.name, set?.name, playName);
       if (triple) pushMulti(this.byTriple, triple, playKey);
 
+      const setPlay = setPlayKey(set?.name, playName);
+      if (setPlay) pushMulti(this.bySetPlay, setPlay, playKey);
+
       const presentation = presentationAlias(formation?.name, set?.name);
       const presentationKey = presentationPlayKey(presentation, playName);
       if (presentationKey) pushMulti(this.byPresentationPlay, presentationKey, playKey);
@@ -109,7 +119,7 @@ class EaPlayKnowledgeStore {
       }
     }
 
-    for (const map of [this.byTriple, this.byPresentationPlay, this.byAuthoredPlayId]) {
+    for (const map of [this.byTriple, this.bySetPlay, this.byPresentationPlay, this.byAuthoredPlayId]) {
       for (const [key, values] of map) map.set(key, uniqueValues(values));
     }
 
@@ -169,7 +179,7 @@ class EaPlayKnowledgeStore {
     const setName = normalizeStructuralValue(query.setName);
     const presentation = normalizeStructuralValue(query.presentation);
 
-    if (!playName || (!presentation && !(formationName && setName))) {
+    if (!playName || (!setName && !presentation)) {
       return {
         status: 'unresolved',
         reason: 'insufficient_evidence',
@@ -179,6 +189,12 @@ class EaPlayKnowledgeStore {
 
     const candidateLists = [];
     const strategies = [];
+
+    if (setName) {
+      const key = setPlayKey(setName, playName);
+      candidateLists.push(this.bySetPlay.get(key) || []);
+      strategies.push('set_play');
+    }
 
     if (formationName && setName) {
       const key = tripleKey(formationName, setName, playName);
@@ -273,5 +289,6 @@ module.exports = {
   normalizeStructuralValue,
   presentationAlias,
   tripleKey,
+  setPlayKey,
   presentationPlayKey,
 };

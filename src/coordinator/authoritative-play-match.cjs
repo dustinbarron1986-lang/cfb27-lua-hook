@@ -21,10 +21,10 @@ function liveEvidence(liveCall = {}) {
       value: liveCall.name || null,
       source: 'live_telemetry.offensivePlay',
     },
-    presentation: {
+    setName: {
       value: liveCall.set || null,
       source: 'live_telemetry.offensiveSet',
-      semanticRole: 'structural_presentation',
+      semanticRole: 'set_name',
     },
     livePlayId: {
       value: liveCall.id == null ? null : String(liveCall.id),
@@ -50,11 +50,11 @@ function nameMatches(playbook, liveCall) {
 
 function exactStructuralMatches(playbook, liveCall) {
   const name = normalizeStructuralValue(liveCall?.name);
-  const presentation = normalizeStructuralValue(liveCall?.set);
-  if (!name || !presentation) return [];
+  const setName = normalizeStructuralValue(liveCall?.set);
+  if (!name || !setName) return [];
   return (playbook?.plays || []).filter(play =>
     normalizeStructuralValue(play?.name) === name &&
-    normalizeStructuralValue(play?.formation) === presentation
+    normalizeStructuralValue(play?.setName) === setName
   );
 }
 
@@ -102,70 +102,48 @@ function matchAuthoritativePlayContext(playbook, liveCall = {}) {
   if (!normalizeStructuralValue(liveCall.name)) {
     return unresolved('missing_live_play_name', null, liveCall);
   }
-
-  const structural = exactStructuralMatches(playbook, liveCall);
-  if (structural.length > 1) {
-    return {
-      status: 'ambiguous',
-      reason: 'multiple_exact_structural_membership_matches',
-      matchStrategy: 'exact_structural',
-      authorityEligible: false,
-      evidence,
-      candidates: structural.map(candidateSummary),
-    };
+  if (!normalizeStructuralValue(liveCall.set)) {
+    return unresolved('missing_live_set_name', null, liveCall);
   }
+
+  // Live offensiveSet is observed Set-name evidence. It is not a combined
+  // Formation+Set presentation. A complete live Set+Play pair is therefore
+  // sufficient to query the authoritative corpus directly. The active
+  // playbook is consulted only for independently trustworthy, separately
+  // represented Formation evidence; it is never required to make the live
+  // Set+Play pair authority-eligible.
+  const structural = exactStructuralMatches(playbook, liveCall);
+  let verifiedStructure = { formationName: null, setName: null, evidence: null };
 
   if (structural.length === 1) {
-    const play = structural[0];
-    const verifiedStructure = verifiedSeparateStructure(play);
-    const membership = {
-      strategy: 'exact_structural',
-      source: 'active_offensive_playbook',
-      candidate: candidateSummary(play),
-    };
-
-    return {
-      status: 'matched',
-      reason: null,
-      matchStrategy: 'exact_structural',
-      authorityEligible: true,
-      play,
-      evidence: {
-        ...evidence,
-        membership,
-        ...(verifiedStructure.evidence || {}),
-      },
-      query: {
-        playName: liveCall.name,
-        presentation: liveCall.set,
-        formationName: verifiedStructure.formationName,
-        setName: verifiedStructure.setName,
-      },
-      candidates: [candidateSummary(play)],
-    };
+    verifiedStructure = verifiedSeparateStructure(structural[0]);
   }
 
-  const ids = exactIdMatches(playbook, liveCall);
-  if (ids.length) {
-    return unresolved(
-      ids.length > 1 ? 'multiple_live_id_membership_matches_not_authoritative' : 'live_id_match_not_authority_bearing',
-      'exact_live_id',
-      liveCall,
-      ids
-    );
-  }
+  const membership = {
+    strategy: 'live_set_play',
+    source: 'live_telemetry',
+    exactVerifiedDbCandidateCount: structural.length,
+    candidates: structural.map(candidateSummary),
+  };
 
-  const names = nameMatches(playbook, liveCall);
-  if (names.length) {
-    return unresolved(
-      'name_only_match_not_authority_bearing',
-      'name_only',
-      liveCall,
-      names
-    );
-  }
-
-  return unresolved('no_exact_structural_membership_match', null, liveCall);
+  return {
+    status: 'matched',
+    reason: null,
+    matchStrategy: 'live_set_play',
+    authorityEligible: true,
+    play: structural.length === 1 ? structural[0] : null,
+    evidence: {
+      ...evidence,
+      membership,
+      ...(verifiedStructure.evidence || {}),
+    },
+    query: {
+      playName: liveCall.name,
+      setName: liveCall.set,
+      formationName: verifiedStructure.formationName,
+    },
+    candidates: structural.map(candidateSummary),
+  };
 }
 
 function resolveAuthoritativeOffensivePlay({ store, playbook, liveCall } = {}) {
@@ -196,7 +174,7 @@ function resolveAuthoritativeOffensivePlay({ store, playbook, liveCall } = {}) {
     upstreamMatch: {
       status: match.status,
       matchStrategy: match.matchStrategy,
-      candidate: match.candidates[0] || null,
+      candidates: match.candidates || [],
     },
   };
 }

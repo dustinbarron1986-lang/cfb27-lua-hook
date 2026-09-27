@@ -43,33 +43,36 @@ function call(name, set, id = 'live-1', available = true) {
   return { available, name, set, id };
 }
 
-test('bare-name findPlay fallback cannot donate DB structure to authoritative identity', () => {
+test('bare-name findPlay fallback cannot donate DB Formation to ambiguous live Set+Play authority', () => {
   const playbook = {
     plays: [{
       id: 'db-pa-boot',
       name: 'PA Boot',
       formation: 'I Form Pro',
       formationName: 'I Form',
-      setName: 'Pro',
       membershipVerified: true,
       membershipSource: 'verified_current_overlay',
     }],
   };
-  const liveCall = call('PA Boot', 'Weak I Pro', '999');
+  const liveCall = call('PA Boot', 'Pro', '999');
   const legacy = findPlay(playbook, { id: liveCall.id, name: liveCall.name, set: liveCall.set });
   assert.equal(legacy, playbook.plays[0], 'legacy findPlay should demonstrate the bare-name fallback');
 
   const store = new EaPlayKnowledgeStore({ document: artifact([
     { formation: 'I Form', set: 'Pro', name: 'PA Boot', playId: 1, asset: 'I_Form/Pro/PA_Boot' },
+    { formation: 'Weak I', set: 'Pro', name: 'PA Boot', playId: 2, asset: 'Weak_I/Pro/PA_Boot' },
   ]) });
+
   const result = resolveAuthoritativeOffensivePlay({ store, playbook, liveCall });
-  assert.equal(result.status, 'unresolved');
-  assert.equal(result.reason, 'name_only_match_not_authority_bearing');
-  assert.equal(result.matchStrategy, 'name_only');
-  assert.equal(result.authorityEligible, false);
+  assert.equal(result.status, 'ambiguous');
+  assert.equal(result.reason, 'multiple_authoritative_structural_candidates');
+  assert.equal(result.matchStrategy, 'set_play');
+  assert.equal(result.candidates.length, 2);
+  assert.equal(result.playKey, undefined);
+  assert.equal(result.evidence.formationName, undefined, 'name-only legacy metadata must not become Formation authority');
 });
 
-test('exact structural live evidence resolves and preserves evidence provenance', () => {
+test('live Set+Play evidence resolves and preserves exact telemetry provenance', () => {
   const playbook = {
     plays: [{
       id: 'db-pa-boot',
@@ -86,39 +89,138 @@ test('exact structural live evidence resolves and preserves evidence provenance'
   const result = resolveAuthoritativeOffensivePlay({
     store,
     playbook,
-    liveCall: call('PA Boot', 'I Form Pro', '12345'),
+    liveCall: call('PA Boot', 'Pro', '12345'),
   });
   assert.equal(result.status, 'resolved');
+  assert.equal(result.matchStrategy, 'set_play');
   assert.equal(result.playKey, 'play:I_Form/Pro/PA_Boot');
+  assert.equal(result.formationName, 'I Form');
+  assert.equal(result.setName, 'Pro');
   assert.equal(result.evidence.playName.source, 'live_telemetry.offensivePlay');
-  assert.equal(result.evidence.presentation.source, 'live_telemetry.offensiveSet');
-  assert.equal(result.evidence.presentation.semanticRole, 'structural_presentation');
+  assert.equal(result.evidence.setName.source, 'live_telemetry.offensiveSet');
+  assert.equal(result.evidence.setName.semanticRole, 'set_name');
   assert.equal(result.evidence.livePlayId.authorityBearing, false);
-  assert.equal(result.upstreamMatch.matchStrategy, 'exact_structural');
+  assert.equal(result.upstreamMatch.matchStrategy, 'live_set_play');
 });
 
-test('exact live id alone is diagnostic membership evidence, not authority-bearing', () => {
+test('exact live id remains diagnostic-only and cannot rescue a Set+Play corpus miss', () => {
   const playbook = {
-    plays: [{ id: '77', name: 'PA Boot', formation: 'I Form Pro' }],
+    plays: [{ id: '77', name: 'DB Play', formation: 'Singleback Ace' }],
   };
-  const match = matchAuthoritativePlayContext(playbook, call('Different Play', 'Different Set', '77'));
-  assert.equal(match.status, 'unresolved');
-  assert.equal(match.matchStrategy, 'exact_live_id');
-  assert.equal(match.reason, 'live_id_match_not_authority_bearing');
-  assert.equal(match.authorityEligible, false);
+  const store = new EaPlayKnowledgeStore({ document: artifact([
+    { formation: 'Singleback', set: 'Ace', name: 'PA Jet Sweep', playId: 77, asset: 'Singleback/Ace/PA_Jet_Sweep' },
+  ]) });
+
+  const result = resolveAuthoritativeOffensivePlay({
+    store,
+    playbook,
+    liveCall: call('Different Play', 'Ace', '77'),
+  });
+  assert.equal(result.status, 'not_found');
+  assert.equal(result.reason, 'authoritative_structural_miss');
+  assert.equal(result.matchStrategy, 'set_play');
+  assert.equal(result.evidence.livePlayId.authorityBearing, false);
 });
 
-test('strict membership helper is collision-aware for multiple exact structural matches', () => {
+test('strict helper preserves multiple exact DB Set+Play matches without first-match Formation authority', () => {
   const playbook = {
     plays: [
-      { id: 'a', name: 'PA Boot', formation: 'I Form Pro' },
-      { id: 'b', name: 'PA Boot', formation: 'I Form Pro' },
+      {
+        id: 'a',
+        name: 'PA Boot',
+        setName: 'Pro',
+        formationName: 'I Form',
+        membershipVerified: true,
+        membershipSource: 'verified_current_overlay',
+      },
+      {
+        id: 'b',
+        name: 'PA Boot',
+        setName: 'Pro',
+        formationName: 'Weak I',
+        membershipVerified: true,
+        membershipSource: 'verified_current_overlay',
+      },
     ],
   };
-  const match = matchAuthoritativePlayContext(playbook, call('PA Boot', 'I Form Pro'));
-  assert.equal(match.status, 'ambiguous');
-  assert.equal(match.reason, 'multiple_exact_structural_membership_matches');
+  const match = matchAuthoritativePlayContext(playbook, call('PA Boot', 'Pro'));
+  assert.equal(match.status, 'matched');
+  assert.equal(match.authorityEligible, true);
+  assert.equal(match.matchStrategy, 'live_set_play');
   assert.equal(match.candidates.length, 2);
+  assert.equal(match.query.formationName, null);
+  assert.equal(match.play, null);
+});
+
+test('actual live Set-name shapes resolve through authoritative Set+Play lookup', () => {
+  const store = new EaPlayKnowledgeStore({ document: artifact([
+    { formation: 'Singleback', set: 'Ace', name: 'PA Jet Sweep', playId: 101, asset: 'Singleback/Ace/PA_Jet_Sweep' },
+    { formation: 'Singleback', set: 'Bunch', name: 'PA Boot Slide', playId: 102, asset: 'Singleback/Bunch/PA_Boot_Slide' },
+    { formation: 'Singleback', set: 'Wing Pair', name: 'Spacing', playId: 103, asset: 'Singleback/Wing_Pair/Spacing' },
+  ]) });
+  const playbook = { plays: [] };
+
+  for (const sample of [
+    ['Ace', 'PA Jet Sweep', 'play:Singleback/Ace/PA_Jet_Sweep'],
+    ['Bunch', 'PA Boot Slide', 'play:Singleback/Bunch/PA_Boot_Slide'],
+    ['Wing Pair', 'Spacing', 'play:Singleback/Wing_Pair/Spacing'],
+  ]) {
+    const [setName, playName, expectedPlayKey] = sample;
+    const result = resolveFreshOffensiveAuthority({
+      store,
+      playbook,
+      liveCall: call(playName, setName),
+      fresh: true,
+    });
+    assert.equal(result.status, 'resolved', `${setName} / ${playName}`);
+    assert.equal(result.matchStrategy, 'set_play');
+    assert.equal(result.playKey, expectedPlayKey);
+  }
+});
+
+test('known College / Onside Kick Set+Play collision stays ambiguous with all candidates', () => {
+  const store = new EaPlayKnowledgeStore({ document: artifact([
+    { formation: 'Kickoff', set: 'College', name: 'Onside Kick', playId: 201, asset: 'Kickoff/College/Onside_Kick' },
+    { formation: 'Kickoff', set: 'College', name: 'Onside Kick', playId: 202, asset: 'Kickoff/College/Nested/Onside_Kick' },
+  ]) });
+
+  const result = resolveFreshOffensiveAuthority({
+    store,
+    playbook: { plays: [] },
+    liveCall: call('Onside Kick', 'College'),
+    fresh: true,
+  });
+  assert.equal(result.status, 'ambiguous');
+  assert.equal(result.matchStrategy, 'set_play');
+  assert.equal(result.candidates.length, 2);
+  assert.equal(result.playKey, undefined);
+  assert.deepEqual(
+    new Set(result.candidates.map(candidate => candidate.playKey)),
+    new Set(['play:Kickoff/College/Onside_Kick', 'play:Kickoff/College/Nested/Onside_Kick'])
+  );
+});
+
+test('missing live Set or Play is insufficient evidence, not an authoritative corpus miss', () => {
+  const store = new EaPlayKnowledgeStore({ document: artifact([
+    { formation: 'Singleback', set: 'Ace', name: 'PA Jet Sweep', playId: 101, asset: 'Singleback/Ace/PA_Jet_Sweep' },
+  ]) });
+  const playbook = { plays: [] };
+
+  const missingSet = resolveAuthoritativeOffensivePlay({
+    store,
+    playbook,
+    liveCall: call('PA Jet Sweep', null),
+  });
+  assert.equal(missingSet.status, 'unresolved');
+  assert.equal(missingSet.reason, 'missing_live_set_name');
+
+  const missingPlay = resolveAuthoritativeOffensivePlay({
+    store,
+    playbook,
+    liveCall: call(null, 'Ace'),
+  });
+  assert.equal(missingPlay.status, 'unresolved');
+  assert.equal(missingPlay.reason, 'missing_live_play_name');
 });
 
 test('authoritative offensive identity is subordinate to existing offense freshness and call availability', () => {
@@ -126,7 +228,7 @@ test('authoritative offensive identity is subordinate to existing offense freshn
   const store = new EaPlayKnowledgeStore({ document: artifact([
     { formation: 'I Form', set: 'Pro', name: 'PA Boot', playId: 1, asset: 'I_Form/Pro/PA_Boot' },
   ]) });
-  const liveCall = call('PA Boot', 'I Form Pro');
+  const liveCall = call('PA Boot', 'Pro');
 
   const stale = resolveFreshOffensiveAuthority({ store, playbook, liveCall, fresh: false });
   assert.equal(stale.status, 'unresolved');
@@ -157,8 +259,8 @@ test('audible A to B replaces canonical identity with no independent lifecycle o
     { formation: 'I Form', set: 'Pro', name: 'HB Duo', playId: 2, asset: 'I_Form/Pro/HB_Duo' },
   ]) });
 
-  const first = resolveFreshOffensiveAuthority({ store, playbook, liveCall: call('PA Boot', 'I Form Pro', '1'), fresh: true });
-  const audible = resolveFreshOffensiveAuthority({ store, playbook, liveCall: call('HB Duo', 'I Form Pro', '2'), fresh: true });
+  const first = resolveFreshOffensiveAuthority({ store, playbook, liveCall: call('PA Boot', 'Pro', '1'), fresh: true });
+  const audible = resolveFreshOffensiveAuthority({ store, playbook, liveCall: call('HB Duo', 'Pro', '2'), fresh: true });
   assert.equal(first.status, 'resolved');
   assert.equal(audible.status, 'resolved');
   assert.notEqual(first.playKey, audible.playKey);
@@ -172,7 +274,7 @@ test('artifact failure leaves legacy selected play usable and only authority una
   const authority = resolveFreshOffensiveAuthority({
     store,
     playbook,
-    liveCall: call('PA Boot', 'I Form Pro'),
+    liveCall: call('PA Boot', 'Pro'),
     fresh: true,
   });
   assert.equal(selectedPlay, playbook.plays[0]);
@@ -189,7 +291,7 @@ test('resolved authority attaches exact canonical identity without changing lega
   const authority = resolveFreshOffensiveAuthority({
     store,
     playbook,
-    liveCall: call('PA Boot', 'I Form Pro', 'unrelated-live-id'),
+    liveCall: call('PA Boot', 'Pro', 'unrelated-live-id'),
     fresh: true,
   });
   const enriched = attachAuthoritativeIdentity(selectedPlay, authority);
@@ -204,10 +306,10 @@ test('resolved authority attaches exact canonical identity without changing lega
 test('EA authority diagnostic logs only transitions and includes canonical evidence', () => {
   const logs = [];
   const io = { log: line => logs.push(line) };
-  const liveCall = call('PA Boot', 'I Form Pro', '999');
+  const liveCall = call('PA Boot', 'Pro', '999');
   const resolved = {
     status: 'resolved',
-    matchStrategy: 'formation_set_presentation_play',
+    matchStrategy: 'set_play',
     formationName: 'I Form',
     setName: 'Pro',
     playName: 'PA Boot',
@@ -222,7 +324,7 @@ test('EA authority diagnostic logs only transitions and includes canonical evide
   assert.equal(logs.length, 1);
   assert.equal(
     logs[0],
-    '[EA-AUTH] resolved | live="I Form Pro / PA Boot" | strategy=formation_set_presentation_play | formation="I Form" | set="Pro" | play="PA Boot" | playKey="play:football/Gameplay/playbooks/PlayLibrary/Offense/I_Form/Pro/PA_Boot" | authoredPlayId=1234'
+    '[EA-AUTH] resolved | live="Pro / PA Boot" | strategy=set_play | formation="I Form" | set="Pro" | play="PA Boot" | playKey="play:football/Gameplay/playbooks/PlayLibrary/Offense/I_Form/Pro/PA_Boot" | authoredPlayId=1234'
   );
 
   const audible = {
@@ -231,7 +333,7 @@ test('EA authority diagnostic logs only transitions and includes canonical evide
     playKey: 'play:football/Gameplay/playbooks/PlayLibrary/Offense/I_Form/Pro/26_Duo',
     authoredPlayId: 5678,
   };
-  key = logAuthorityTransition(audible, call('HB Duo', 'I Form Pro', '1000'), key, io);
+  key = logAuthorityTransition(audible, call('HB Duo', 'Pro', '1000'), key, io);
   assert.equal(logs.length, 2);
   assert.match(logs[1], /playKey="play:football\/Gameplay\/playbooks\/PlayLibrary\/Offense\/I_Form\/Pro\/26_Duo"/);
 });
@@ -260,7 +362,7 @@ test('EA authority diagnostic reports failure reasons and deduplicates without a
   const notFound = {
     status: 'not_found',
     reason: 'authoritative_structural_miss',
-    matchStrategy: 'formation_set_presentation_play',
+    matchStrategy: 'set_play',
   };
   key = logAuthorityTransition(notFound, liveA, key, io);
   assert.equal(logs.length, 2);

@@ -201,3 +201,87 @@ test('expandPlay preserves 11 ordered slots, shared assignment references, and p
   assert.equal(expanded.players[10].specialTeamsUnresolved, true);
   assert.equal(expanded.resolution.status, 'partial_special_teams');
 });
+
+
+test('exact live Set+Play evidence resolves one authoritative candidate', () => {
+  const store = new EaPlayKnowledgeStore({ document: syntheticArtifact([
+    { formation: 'Singleback', set: 'Ace', name: 'PA Jet Sweep', playId: 101, assetPath: 'Play/Singleback/Ace/PA_Jet_Sweep' },
+  ]) });
+
+  const result = store.resolvePlay({
+    playName: 'PA Jet Sweep',
+    setName: 'Ace',
+    evidence: eligibleEvidence,
+  });
+
+  assert.equal(result.status, 'resolved');
+  assert.equal(result.matchStrategy, 'set_play');
+  assert.equal(result.formationName, 'Singleback');
+  assert.equal(result.setName, 'Ace');
+  assert.equal(result.playKey, 'play:Singleback/Ace/PA Jet Sweep');
+});
+
+test('complete Set+Play evidence with zero corpus candidates is not_found', () => {
+  const store = new EaPlayKnowledgeStore({ document: syntheticArtifact([
+    { formation: 'Singleback', set: 'Ace', name: 'PA Jet Sweep', playId: 101 },
+  ]) });
+
+  const result = store.resolvePlay({
+    playName: 'Missing Play',
+    setName: 'Ace',
+    evidence: eligibleEvidence,
+  });
+
+  assert.equal(result.status, 'not_found');
+  assert.equal(result.reason, 'authoritative_structural_miss');
+  assert.equal(result.matchStrategy, 'set_play');
+  assert.deepEqual(result.candidates, []);
+});
+
+test('Set+Play collisions remain ambiguous and preserve every authoritative candidate', () => {
+  const store = new EaPlayKnowledgeStore({ document: syntheticArtifact([
+    { formation: 'Kickoff', set: 'College', name: 'Onside Kick', playId: 201, playKey: 'play:kickoff/a' },
+    { formation: 'Kickoff', set: 'College', name: 'Onside Kick', playId: 202, playKey: 'play:kickoff/b' },
+  ]) });
+
+  const result = store.resolvePlay({
+    playName: 'Onside Kick',
+    setName: 'College',
+    evidence: eligibleEvidence,
+  });
+
+  assert.equal(result.status, 'ambiguous');
+  assert.equal(result.matchStrategy, 'set_play');
+  assert.equal(result.candidates.length, 2);
+  assert.deepEqual(
+    new Set(result.candidates.map(candidate => candidate.playKey)),
+    new Set(['play:kickoff/a', 'play:kickoff/b'])
+  );
+  assert.equal(result.playKey, undefined);
+});
+
+test('separately proven Formation evidence may reduce Set+Play candidates to one', () => {
+  const store = new EaPlayKnowledgeStore({ document: syntheticArtifact([
+    { formation: 'I Form', set: 'Pro', name: 'PA Boot', playId: 301 },
+    { formation: 'Weak I', set: 'Pro', name: 'PA Boot', playId: 302 },
+  ]) });
+
+  const ambiguous = store.resolvePlay({
+    playName: 'PA Boot',
+    setName: 'Pro',
+    evidence: eligibleEvidence,
+  });
+  assert.equal(ambiguous.status, 'ambiguous');
+  assert.equal(ambiguous.candidates.length, 2);
+
+  const resolved = store.resolvePlay({
+    playName: 'PA Boot',
+    setName: 'Pro',
+    formationName: 'I Form',
+    evidence: eligibleEvidence,
+  });
+  assert.equal(resolved.status, 'resolved');
+  assert.equal(resolved.matchStrategy, 'structural_intersection');
+  assert.equal(resolved.formationName, 'I Form');
+  assert.equal(resolved.playKey, 'play:I Form/Pro/PA Boot');
+});
