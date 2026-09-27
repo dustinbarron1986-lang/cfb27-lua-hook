@@ -256,6 +256,7 @@ test('live coordinator defense branch no longer emits the "not implemented" plac
   printDefensiveRecommendation(engine, playbooks, state, null, { offense: true, defense: true }, io, coordinatorWindow);
 
   assert.ok(logs.some(l => l.includes('[DC] CALL:')));
+  assert.ok(logs.includes('[DC] POOL: total=2 eligible=2 specialTeams=0 situational=0 unknown=0'));
   assert.ok(!logs.some(l => l.includes('not implemented yet')));
   assert.equal(coordinatorWindow.state.phase, 'defensive_huddle');
 });
@@ -308,7 +309,7 @@ test('CoordinatorWindow accepts/renders the defensive recommendation state', () 
   assert.equal(coordinatorWindow.state.call, null);
 });
 
-test('default playbook loading keeps the documented sample fallback for defense (no verified DB selection exists)', () => {
+test('default playbook loading keeps the sample fallback when no defense selection is saved', () => {
   const playbooks = loadPlaybooks(root, {});
   assert.equal(playbooks.defense.plays.length, 2);
   assert.equal(playbooks.defense.status, 'sample-only');
