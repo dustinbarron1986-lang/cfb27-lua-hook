@@ -87,7 +87,7 @@ function compactRuntimeIndex(compiled) {
             player.assignmentGuid || '',
           ].join('|')
         : null;
-      const assignmentKey = assignmentIdentity
+      const assignmentKey = assignmentIdentity && player.positionAssignId != null
         ? stableKey('assignment', assignmentIdentity)
         : null;
 
