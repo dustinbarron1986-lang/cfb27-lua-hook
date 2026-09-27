@@ -531,6 +531,19 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
           quarantine = handleNewSituation(engine, playbooks, current, lastSituationKey, situationKey, io, coordinatorWindow);
           fresh = { offense: false, defense: false };
           cleared = { offense: false, defense: false };
+
+          // An accepted penalty/administrative reset is positive evidence that
+          // the previous CPU offensive call no longer belongs to the active
+          // down, even if telemetry keeps exposing the same signature through
+          // the transition. On the user-defense path, treat the offensive side
+          // as a new generation so the DC is not left permanently pending.
+          // The reducer emitted administrative_reset specifically so this does
+          // not fabricate a completed snap or pollute performance history.
+          if (reduced.type === 'administrative_reset' && current.possession === 1) {
+            quarantine.offense = { available: false };
+            io.log('[COORD] Administrative reset: re-arming CPU offensive call freshness');
+          }
+
           lastSituationKey = situationKey;
           lastExecutionKey = null;
         }
