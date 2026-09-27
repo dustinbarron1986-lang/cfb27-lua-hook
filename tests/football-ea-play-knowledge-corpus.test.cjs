@@ -120,3 +120,57 @@ test('all real Set default alignment slots map exactly 0 through 10', { skip: !h
     );
   }
 });
+
+
+function normalizeIdentityPart(value) {
+  return value == null ? null : String(value).trim().toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
+}
+
+function collisionGroups(entries, keyOf) {
+  const groups = new Map();
+  for (const entry of entries) {
+    const key = keyOf(entry);
+    if (key == null) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry.play.assetPath || entry.play.name || null);
+  }
+  return [...groups.entries()]
+    .filter(([, values]) => values.length > 1)
+    .map(([key, assetPaths]) => ({ key, count: assetPaths.length, assetPaths }))
+    .sort((left, right) => left.key.localeCompare(right.key));
+}
+
+test('real corpus reports authoritative identity collision audit', { skip: !hasCorpus }, () => {
+  const result = buildEaPlayKnowledge(formationSource, assignmentSource, { compact: false });
+  const entries = result.plays;
+  const playName = collisionGroups(entries, entry => normalizeIdentityPart(entry.play.name));
+  const setPlay = collisionGroups(entries, entry => {
+    const setName = normalizeIdentityPart(entry.set?.name);
+    const name = normalizeIdentityPart(entry.play.name);
+    return setName && name ? setName + '\u0000' + name : null;
+  });
+  const formationSetPlay = collisionGroups(entries, entry => {
+    const formationName = normalizeIdentityPart(entry.formation?.name);
+    const setName = normalizeIdentityPart(entry.set?.name);
+    const name = normalizeIdentityPart(entry.play.name);
+    return formationName && setName && name ? formationName + '\u0000' + setName + '\u0000' + name : null;
+  });
+  const authoredPlayId = collisionGroups(entries, entry => entry.play.playId == null ? null : String(entry.play.playId));
+  const assetPath = collisionGroups(entries, entry => normalizeIdentityPart(entry.play.assetPath));
+  const missingAuthoredPlayIds = entries.filter(entry => entry.play.playId == null).length;
+
+  const audit = {
+    playCount: entries.length,
+    playNameCollisionGroups: playName.length,
+    setPlayCollisionGroups: setPlay.length,
+    formationSetPlayCollisionGroups: formationSetPlay.length,
+    authoredPlayIdCollisionGroups: authoredPlayId.length,
+    exactAssetPathCollisionGroups: assetPath.length,
+    missingAuthoredPlayIds,
+    collisions: { playName, setPlay, formationSetPlay, authoredPlayId, assetPath },
+  };
+
+  console.log('[EA IDENTITY COLLISION AUDIT] ' + JSON.stringify(audit));
+  assert.equal(entries.length, 514);
+  assert.equal(assetPath.length, 0, 'Exact EA Play asset paths must remain unique canonical identities');
+});

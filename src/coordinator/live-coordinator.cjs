@@ -14,6 +14,11 @@ const {
   loadDefensePlaybookFromDatabase,
 } = require('./playbook-loader.cjs');
 const { loadCoordinatorConfig, saveCoordinatorConfig } = require('../football/config/coordinator-config');
+const { EaPlayKnowledgeStore } = require('../football/knowledge/ea-play-knowledge-store');
+const {
+  resolveFreshOffensiveAuthority,
+  attachAuthoritativeIdentity,
+} = require('./authoritative-play-match.cjs');
 
 let CoordinatorDatabase = null;
 let DatabasePlaybookRepository = null;
@@ -181,7 +186,7 @@ function logFreshnessTransitions(previousFresh, nextFresh, current, io) {
   }
 }
 
-function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coordinatorWindow) {
+function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coordinatorWindow, authoritativeOffense = null) {
   if (state.possession !== 0) return seenKey;
   if (!fresh.offense || !fresh.defense) return seenKey;
   const offenseCall = callFromState(state, 'offense');
@@ -210,14 +215,19 @@ function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coor
   });
   if (!selectedPlay) return seenKey;
 
+  // The legacy selectedPlay remains the execution-behavior source. The EA
+  // identity is additive only, and is attached solely after the independent
+  // strict authority path has resolved one canonical Play asset.
+  const executionPlay = attachAuthoritativeIdentity(selectedPlay, authoritativeOffense);
+
   const result = engine.adviseExecution({
-    selectedPlay,
+    selectedPlay: executionPlay,
     defensiveCall: { id: defenseCall.id, set: defenseCall.set, name: defenseCall.name },
   });
 
   coordinatorWindow.showSelection({
     type: isAudible ? 'audible' : 'selected',
-    play: selectedPlay,
+    play: executionPlay,
     opponentPlay: {
       id: defenseCall.id,
       name: defenseCall.name,
@@ -480,6 +490,12 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   const client = sdk.createClient({ pid: game.pid });
   const engine = new FootballEngine();
   const reducer = new SnapReducer();
+  // Optional/read-only: the generated EA artifact is intentionally gitignored.
+  // Missing/invalid data makes only the authority layer unavailable; legacy
+  // coordinator selection/execution remains fully operational.
+  const authoritativePlayStore = new EaPlayKnowledgeStore({
+    filePath: path.resolve(root, 'data/knowledge/pro-style-ea-play-knowledge.json'),
+  });
   let lastSituationKey = null;
   let lastExecutionKey = null;
   let quarantine = { offense: { available: false }, defense: { available: false } };
@@ -560,7 +576,34 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
         ({ fresh, cleared } = updateFreshness(current, quarantine, fresh, cleared));
         logFreshnessTransitions(previousFresh, fresh, current, io);
 
-        lastExecutionKey = printExecutionAdvice(engine, playbooks, current, lastExecutionKey, fresh, io, coordinatorWindow);
+        // Authoritative offensive identity is derived from the existing
+        // offense freshness lifecycle, not from defense readiness and not from
+        // an independent cache/TTL. A situation boundary resets fresh.offense;
+        // stale/unavailable calls therefore cannot retain prior EA identity,
+        // while an audible is re-resolved immediately from the new live call.
+        const authoritativeOffense = current.possession === 0
+          ? resolveFreshOffensiveAuthority({
+              store: authoritativePlayStore,
+              playbook: playbooks.offense,
+              liveCall: callFromState(current, 'offense'),
+              fresh: fresh.offense,
+            })
+          : {
+              status: 'unresolved',
+              reason: 'user_not_on_offense',
+              authorityEligible: false,
+            };
+
+        lastExecutionKey = printExecutionAdvice(
+          engine,
+          playbooks,
+          current,
+          lastExecutionKey,
+          fresh,
+          io,
+          coordinatorWindow,
+          authoritativeOffense
+        );
         lastExecutionKey = printDefensiveRecommendation(engine, playbooks, current, lastExecutionKey, fresh, io, coordinatorWindow);
       }
 
