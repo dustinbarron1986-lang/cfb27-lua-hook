@@ -26,11 +26,15 @@ function splitFrostbiteRef(value) {
   if (value == null) return { ref: null, assetPath: null };
   const text = String(value).trim();
   if (!text || text.toLowerCase() === 'null') return { ref: null, assetPath: null };
-  const slash = text.lastIndexOf('\\');
-  if (slash < 0) return { ref: text, assetPath: null };
+
+  // MMC/Frostbite external PointerRef values use one or more literal
+  // backslashes between the asset path and instance GUID. Split the entire
+  // delimiter run so the normalized asset path never retains a trailing slash.
+  const match = text.match(/^(.*?)[\\\\]+([^\\\\]+)$/);
+  if (!match) return { ref: text, assetPath: null };
   return {
-    assetPath: text.slice(0, slash) || null,
-    ref: text.slice(slash + 1) || null,
+    assetPath: match[1] || null,
+    ref: match[2] || null,
   };
 }
 
