@@ -13,6 +13,8 @@ const { buildAssignmentIndex } = require('../scripts/build-ea-assignment-index.c
 const { buildPassingPlayArt } = require('../src/football/analysis/play-art-engine');
 const { deriveStructuralProgression } = require('../src/football/analysis/passing-progression-engine');
 const { analyzeRunAssignments } = require('../src/football/analysis/run-gap-engine');
+const { PlayKnowledgeStore } = require('../src/football/knowledge/play-knowledge-store');
+const { ExecutionAdvisor } = require('../src/football/recommendation/execution-advisor');
 
 const DRAG_XML = `<?xml version="1.0" encoding="utf-8"?>
 <partition guid="p1" primaryInstance="main">
@@ -136,4 +138,78 @@ test('index builder preserves collisions instead of overwriting them', () => {
   assert.equal(index.metadata.uniqueAssignmentIds, 1);
   assert.equal(index.metadata.duplicateAssignmentIds, 1);
   assert.equal(Array.isArray(index.assignments['2044271394']), true);
+});
+
+
+test('PlayKnowledgeStore enriches receiver assignment IDs and ExecutionAdvisor derives a coverage-aware read order', () => {
+  const drag = record(DRAG_XML);
+  const slant = {
+    ...drag,
+    positionAssignId: 88,
+    shortName: 'WR_Slant',
+    routeType: 'AssignRouteType_RR_Slant',
+    semantics: {
+      ...drag.semantics,
+      route: { ...drag.semantics.route, routeFamily: 'slant', maxDepth: 8, movementCost: 6 }
+    }
+  };
+  const eaStore = new EaAssignmentStore({
+    data: { assignments: { '2044271394': drag, '88': slant } }
+  });
+  const playStore = new PlayKnowledgeStore({
+    autoData: {
+      playbooks: {
+        '405': {
+          entries: {
+            'singleback ace|test pass': {
+              play: 'Test Pass',
+              formation: 'Singleback Ace',
+              receiverButtons: [
+                { button: 'X', x: -12, y: 0, assignment: 2044271394 },
+                { button: 'Y', x: 8, y: 0, assignment: 88 }
+              ]
+            }
+          }
+        }
+      }
+    },
+    overrideData: { plays: {} },
+    eaAssignmentStore: eaStore
+  });
+
+  const resolved = playStore.resolve(405, 'Singleback Ace', 'Test Pass');
+  assert.equal(resolved.eaAssignmentResolvedCount, 2);
+  assert.equal(resolved.receiverButtons[0].eaAssignmentStatus, 'resolved');
+
+  const advisor = new ExecutionAdvisor({
+    playKnowledgeStore: playStore,
+    knowledgeEngine: {
+      advise() {
+        return {
+          known: true,
+          concept: 'slants',
+          coverage: 'cover_1',
+          pressureDetected: false,
+          coaching: { preSnap: [], postSnap: [] },
+          reasons: []
+        };
+      }
+    }
+  });
+  const result = advisor.advise({
+    selectedPlay: {
+      id: 'test-pass',
+      name: 'Test Pass',
+      formation: 'Singleback Ace',
+      type: 'PASS',
+      primaryConcept: 'slants',
+      concepts: ['slants'],
+      sourcePlaybookId: 405
+    },
+    defensiveCall: { name: 'Cover 1 Robber' }
+  });
+  assert.equal(result.guide.progressionStatus, 'derived');
+  assert.equal(result.guide.diagramMode, 'assignment_geometry');
+  assert.equal(result.guide.receivers.filter(receiver => receiver.assignmentGeometry).length, 2);
+  assert.match(result.guide.warning, /not an EA-authored progression/i);
 });
