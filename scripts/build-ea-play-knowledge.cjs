@@ -134,6 +134,10 @@ function compactRuntimeIndex(compiled) {
       formationRecordCount: Object.keys(formations).length,
       setRecordCount: Object.keys(sets).length,
       assignmentRecordCount: Object.keys(assignments).length,
+      assignmentReferenceReuseCount: Math.max(
+        0,
+        Number(compiled.metadata.resolvedAssignmentRefCount || 0) - Object.keys(assignments).length
+      ),
       playRecordCount: Object.keys(plays).length,
     },
     formations,
@@ -230,6 +234,7 @@ function main(argv = process.argv.slice(2)) {
   console.log('Deduplicated formation records:', result.metadata.formationRecordCount);
   console.log('Deduplicated set records:', result.metadata.setRecordCount);
   console.log('Deduplicated assignment records:', result.metadata.assignmentRecordCount);
+  console.log('Assignment reference reuse:', result.metadata.assignmentReferenceReuseCount);
   console.log('Output bytes:', bytes);
   console.log('Pretty JSON bytes:', sizes.prettyBytes);
   console.log('Minification savings %:', sizes.minificationSavingsPercentage);
