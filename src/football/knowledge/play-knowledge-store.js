@@ -33,21 +33,12 @@ function formationMatches(expected, actual) {
 function enrichReceiver(receiver, eaAssignments) {
   const copy = { ...receiver };
   if (!eaAssignments || receiver?.assignment == null) return copy;
-  const resolved = eaAssignments.resolve(receiver.assignment);
-  if (!resolved) return copy;
-  if (resolved.ambiguous || !resolved.record) {
-    return {
-      ...copy,
-      eaAssignmentStatus: 'ambiguous',
-      eaAssignmentCandidateCount: resolved.candidates?.length || 0,
-    };
-  }
-  return {
-    ...copy,
-    eaAssignmentStatus: 'resolved',
-    eaAssignment: resolved.record,
-    eaAssignmentEquivalentDuplicates: resolved.equivalentDuplicates || 0,
-  };
+
+  // The legacy flattened playbook assignment number is a different namespace
+  // from PositionAssignmentDefine.positionAssignId. Never use it as a lookup key.
+  // Authoritative EA assignment enrichment now belongs to the Play asset compiler,
+  // which resolves Play.positionAssignmentDefines references directly.
+  return { ...copy, eaAssignmentStatus: 'legacy_id_not_resolved' };
 }
 
 class PlayKnowledgeStore {
