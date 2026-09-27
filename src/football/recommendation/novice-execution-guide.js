@@ -334,10 +334,24 @@ function assignmentPlain(meaning) {
   }
 }
 
+function friendlyEaRoute(routeType, routeFamily) {
+  const raw = routeFamily || String(routeType || '')
+    .replace(/^AssignRouteType_/i, '')
+    .replace(/^RR_/i, '');
+  if (!raw) return null;
+  return String(raw).replaceAll('_', ' ').trim();
+}
+
 function receiverKnowledge(playKnowledge) {
   const receivers = Array.isArray(playKnowledge?.receiverButtons) ? playKnowledge.receiverButtons : [];
   return receivers.map(receiver => {
-    const route = assignmentPlain(receiver.assignment_meaning);
+    const fallback = assignmentPlain(receiver.assignment_meaning);
+    const ea = receiver.eaAssignment || null;
+    const geometry = ea?.semantics?.route || null;
+    const routeFamily = geometry?.routeFamily || fallback?.family || null;
+    const routeLabel = geometry
+      ? friendlyEaRoute(ea?.routeType, geometry.routeFamily)
+      : fallback?.label || null;
     return {
       button: receiver.button,
       x: receiver.x,
@@ -345,8 +359,12 @@ function receiverKnowledge(playKnowledge) {
       assignment: receiver.assignment,
       assignmentMeaning: receiver.assignment_meaning || null,
       assignmentConfidence: receiver.assignment_confidence || 'unknown',
-      routeFamily: route?.family || null,
-      routeLabel: route?.label || null
+      eaAssignmentStatus: receiver.eaAssignmentStatus || null,
+      assignmentName: ea?.shortName || null,
+      assignmentRouteType: ea?.routeType || null,
+      assignmentGeometry: geometry,
+      routeFamily,
+      routeLabel
     };
   });
 }
@@ -360,6 +378,23 @@ function verifiedProgression(playKnowledge) {
     detail: read.detail || read.coaching || '',
     path: read.path || null
   }));
+}
+
+function derivedProgression(playKnowledge) {
+  const derived = playKnowledge?.derivedProgression;
+  if (!derived?.available || derived.status !== 'derived_structural' || !Array.isArray(derived.reads)) return null;
+  return {
+    ...derived,
+    reads: derived.reads.map((read, index) => ({
+      number: read.number || String(index + 1),
+      button: read.button || null,
+      label: read.label || `Read ${index + 1}`,
+      detail: read.detail || '',
+      timing: read.timing || null,
+      assignmentId: read.assignmentId ?? null,
+      assignmentName: read.assignmentName || null
+    }))
+  };
 }
 
 function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge } = {}) {
@@ -389,6 +424,7 @@ function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge }
 
   const receivers = receiverKnowledge(playKnowledge);
   const verifiedReads = verifiedProgression(playKnowledge);
+  const derivedReads = derivedProgression(playKnowledge);
   const routeTargets = receivers
     .filter(receiver => receiver.routeLabel)
     .map(receiver => ({
@@ -423,13 +459,33 @@ function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge }
     };
   }
 
+  if (derivedReads) {
+    return {
+      mode: type,
+      concept: concept || null,
+      family: t.family,
+      diagramMode: 'assignment_geometry',
+      diagramLabel: 'EA ASSIGNMENT VIEW — DERIVED READS',
+      reads: derivedReads.reads,
+      paths: [],
+      receivers,
+      coverageNote: note,
+      progressionStatus: 'derived',
+      routeStatus: 'ea_assignment_geometry',
+      timingCalibrated: Boolean(derivedReads.timingCalibrated),
+      warning: derivedReads.warning,
+      terminology: null
+    };
+  }
+
+  const exactGeometryCount = receivers.filter(receiver => receiver.assignmentGeometry?.points?.length).length;
   const partial = receivers.length > 0;
   return {
     mode: type,
     concept: concept || null,
     family: t.family,
-    diagramMode: partial ? 'assignment_partial' : 'concept_estimated',
-    diagramLabel: partial ? 'ASSIGNMENT VIEW — PARTIAL' : 'CONCEPT VIEW — ESTIMATED',
+    diagramMode: exactGeometryCount ? 'assignment_geometry' : (partial ? 'assignment_partial' : 'concept_estimated'),
+    diagramLabel: exactGeometryCount ? 'EA ASSIGNMENT VIEW — PARTIAL' : (partial ? 'ASSIGNMENT VIEW — PARTIAL' : 'CONCEPT VIEW — ESTIMATED'),
     reads: [],
     targets: routeTargets,
     receivers,
@@ -437,10 +493,12 @@ function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge }
     paths: partial ? [] : t.paths,
     coverageNote: note,
     progressionStatus: 'unverified',
-    routeStatus: playKnowledge?.routeKnowledge || 'unknown',
-    warning: partial
-      ? 'The receiver buttons come from the pre-snap alignment. Only routes supported by decoded assignment data are drawn. The designed read order is not known yet.'
-      : 'The exact routes and designed read order are not verified yet. This screen will not invent a progression.',
+    routeStatus: exactGeometryCount ? 'ea_assignment_geometry_partial' : (playKnowledge?.routeKnowledge || 'unknown'),
+    warning: exactGeometryCount
+      ? `${exactGeometryCount} receiver route${exactGeometryCount === 1 ? '' : 's'} use decoded EA assignment geometry. The designed EA read order is still unknown, so no progression is claimed.`
+      : (partial
+        ? 'The receiver buttons come from the pre-snap alignment. Only routes supported by decoded assignment data are drawn. The designed read order is not known yet.'
+        : 'The exact routes and designed read order are not verified yet. This screen will not invent a progression.'),
     terminology: null
   };
 }
