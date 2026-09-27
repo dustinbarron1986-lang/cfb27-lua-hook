@@ -186,6 +186,53 @@ function logFreshnessTransitions(previousFresh, nextFresh, current, io) {
   }
 }
 
+function diagnosticValue(value) {
+  return value == null ? 'null' : JSON.stringify(String(value));
+}
+
+function authorityDiagnosticKey(authority = {}, liveCall = {}) {
+  return [
+    authority.status || 'unresolved',
+    authority.playKey || '',
+    authority.reason || '',
+    authority.matchStrategy || '',
+    liveCall.set || '',
+    liveCall.name || '',
+  ].join('|');
+}
+
+function formatAuthorityDiagnostic(authority = {}, liveCall = {}) {
+  const status = authority.status || 'unresolved';
+  const live = `${liveCall.set || '?'} / ${liveCall.name || '?'}`;
+  const parts = [`[EA-AUTH] ${status}`];
+
+  if (status !== 'resolved') {
+    parts.push(`reason=${authority.reason || 'unspecified'}`);
+  }
+
+  parts.push(`live=${diagnosticValue(live)}`);
+  parts.push(`strategy=${authority.matchStrategy || 'none'}`);
+
+  if (status === 'resolved') {
+    parts.push(`formation=${diagnosticValue(authority.formationName || authority.normalizedQuery?.formationName)}`);
+    parts.push(`set=${diagnosticValue(authority.setName || authority.normalizedQuery?.setName)}`);
+    parts.push(`play=${diagnosticValue(authority.playName || authority.normalizedQuery?.playName || liveCall.name)}`);
+    parts.push(`playKey=${diagnosticValue(authority.playKey)}`);
+    parts.push(`authoredPlayId=${authority.authoredPlayId == null ? 'null' : authority.authoredPlayId}`);
+  } else if (status === 'ambiguous') {
+    parts.push(`candidates=${Array.isArray(authority.candidates) ? authority.candidates.length : 0}`);
+  }
+
+  return parts.join(' | ');
+}
+
+function logAuthorityTransition(authority, liveCall, previousKey, io) {
+  const nextKey = authorityDiagnosticKey(authority, liveCall);
+  if (nextKey === previousKey) return previousKey;
+  io?.log?.(formatAuthorityDiagnostic(authority, liveCall));
+  return nextKey;
+}
+
 function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coordinatorWindow, authoritativeOffense = null) {
   if (state.possession !== 0) return seenKey;
   if (!fresh.offense || !fresh.defense) return seenKey;
@@ -498,6 +545,9 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   });
   let lastSituationKey = null;
   let lastExecutionKey = null;
+  // Diagnostic-only deduplication. This key never participates in freshness,
+  // authority resolution, snap detection, performance recording, or advice.
+  let lastAuthorityDiagnosticKey = null;
   let quarantine = { offense: { available: false }, defense: { available: false } };
   let fresh = { offense: false, defense: false };
   let cleared = { offense: false, defense: false };
@@ -581,11 +631,12 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
         // an independent cache/TTL. A situation boundary resets fresh.offense;
         // stale/unavailable calls therefore cannot retain prior EA identity,
         // while an audible is re-resolved immediately from the new live call.
+        const offensiveLiveCall = callFromState(current, 'offense');
         const authoritativeOffense = current.possession === 0
           ? resolveFreshOffensiveAuthority({
               store: authoritativePlayStore,
               playbook: playbooks.offense,
-              liveCall: callFromState(current, 'offense'),
+              liveCall: offensiveLiveCall,
               fresh: fresh.offense,
             })
           : {
@@ -593,6 +644,13 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
               reason: 'user_not_on_offense',
               authorityEligible: false,
             };
+
+        lastAuthorityDiagnosticKey = logAuthorityTransition(
+          authoritativeOffense,
+          offensiveLiveCall,
+          lastAuthorityDiagnosticKey,
+          io
+        );
 
         lastExecutionKey = printExecutionAdvice(
           engine,
@@ -644,6 +702,9 @@ module.exports = {
   updateSideFreshness,
   updateFreshness,
   logFreshnessTransitions,
+  authorityDiagnosticKey,
+  formatAuthorityDiagnostic,
+  logAuthorityTransition,
   rearmAfterAdministrativeReset,
   createPlaybookService,
   playbookLogLine,

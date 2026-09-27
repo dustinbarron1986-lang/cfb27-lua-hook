@@ -11,6 +11,11 @@ const {
   resolveFreshOffensiveAuthority,
   attachAuthoritativeIdentity,
 } = require('../src/coordinator/authoritative-play-match.cjs');
+const {
+  authorityDiagnosticKey,
+  formatAuthorityDiagnostic,
+  logAuthorityTransition,
+} = require('../src/coordinator/live-coordinator.cjs');
 
 function artifact(entries) {
   const formations = {};
@@ -193,4 +198,79 @@ test('resolved authority attaches exact canonical identity without changing lega
   assert.equal(enriched.formation, selectedPlay.formation);
   assert.equal(enriched.eaAuthority.playKey, 'play:I_Form/Pro/PA_Boot');
   assert.equal(enriched.eaAuthority.authoredPlayId, 1001);
+});
+
+
+test('EA authority diagnostic logs only transitions and includes canonical evidence', () => {
+  const logs = [];
+  const io = { log: line => logs.push(line) };
+  const liveCall = call('PA Boot', 'I Form Pro', '999');
+  const resolved = {
+    status: 'resolved',
+    matchStrategy: 'formation_set_presentation_play',
+    formationName: 'I Form',
+    setName: 'Pro',
+    playName: 'PA Boot',
+    playKey: 'play:football/Gameplay/playbooks/PlayLibrary/Offense/I_Form/Pro/PA_Boot',
+    authoredPlayId: 1234,
+  };
+
+  let key = null;
+  key = logAuthorityTransition(resolved, liveCall, key, io);
+  const repeated = logAuthorityTransition(resolved, liveCall, key, io);
+  assert.equal(repeated, key);
+  assert.equal(logs.length, 1);
+  assert.equal(
+    logs[0],
+    '[EA-AUTH] resolved | live="I Form Pro / PA Boot" | strategy=formation_set_presentation_play | formation="I Form" | set="Pro" | play="PA Boot" | playKey="play:football/Gameplay/playbooks/PlayLibrary/Offense/I_Form/Pro/PA_Boot" | authoredPlayId=1234'
+  );
+
+  const audible = {
+    ...resolved,
+    playName: 'HB Duo',
+    playKey: 'play:football/Gameplay/playbooks/PlayLibrary/Offense/I_Form/Pro/26_Duo',
+    authoredPlayId: 5678,
+  };
+  key = logAuthorityTransition(audible, call('HB Duo', 'I Form Pro', '1000'), key, io);
+  assert.equal(logs.length, 2);
+  assert.match(logs[1], /playKey="play:football\/Gameplay\/playbooks\/PlayLibrary\/Offense\/I_Form\/Pro\/26_Duo"/);
+});
+
+test('EA authority diagnostic reports failure reasons and deduplicates without affecting resolution objects', () => {
+  const logs = [];
+  const io = { log: line => logs.push(line) };
+  const unresolved = {
+    status: 'unresolved',
+    reason: 'name_only_match_not_authority_bearing',
+    matchStrategy: 'name_only',
+    authorityEligible: false,
+  };
+  const liveA = call('PA Boot', 'Weak I Pro', '1');
+  const before = JSON.stringify(unresolved);
+
+  let key = logAuthorityTransition(unresolved, liveA, null, io);
+  key = logAuthorityTransition(unresolved, liveA, key, io);
+  assert.equal(logs.length, 1);
+  assert.equal(JSON.stringify(unresolved), before);
+  assert.equal(
+    logs[0],
+    '[EA-AUTH] unresolved | reason=name_only_match_not_authority_bearing | live="Weak I Pro / PA Boot" | strategy=name_only'
+  );
+
+  const notFound = {
+    status: 'not_found',
+    reason: 'authoritative_structural_miss',
+    matchStrategy: 'formation_set_presentation_play',
+  };
+  key = logAuthorityTransition(notFound, liveA, key, io);
+  assert.equal(logs.length, 2);
+  assert.match(logs[1], /^\[EA-AUTH\] not_found \| reason=authoritative_structural_miss/);
+
+  const liveB = call('HB Stretch', 'Singleback Ace', '2');
+  const sameFailureNewCallKey = logAuthorityTransition(notFound, liveB, key, io);
+  assert.notEqual(sameFailureNewCallKey, key);
+  assert.equal(logs.length, 3, 'a different live call is a diagnostic transition, not per-tick spam');
+
+  assert.notEqual(authorityDiagnosticKey(unresolved, liveA), authorityDiagnosticKey(notFound, liveA));
+  assert.match(formatAuthorityDiagnostic({ status: 'unavailable', reason: 'artifact_missing' }, liveA), /reason=artifact_missing/);
 });
