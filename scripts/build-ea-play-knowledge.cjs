@@ -53,9 +53,15 @@ function compactAlignment(position) {
     depthPosition: position.depthPosition,
     x: position.x,
     y: position.y,
+    depth: position.depth,
+    flippedX: position.flippedX,
+    flippedY: position.flippedY,
+    facing: position.facing,
+    flippedFacing: position.flippedFacing,
     packagePosition: position.packagePosition,
     flipIndex: position.flipIndex,
-    presnapMovement: position.presnapMovement,
+    groupType: position.groupType,
+    primaryMotionMan: position.primaryMotionMan,
   };
 }
 
@@ -67,7 +73,20 @@ function compactRuntimeIndex(compiled) {
       set: entry.set ? {
         ...entry.set,
         positions: (entry.set.positions || []).map(compactAlignment),
-        packagePositions: entry.set.packagePositions || [],
+        defaultPresnapMovement: entry.set.defaultPresnapMovement ? {
+          guid: entry.set.defaultPresnapMovement.guid,
+          name: entry.set.defaultPresnapMovement.name,
+          type: entry.set.defaultPresnapMovement.type,
+          isDefault: entry.set.defaultPresnapMovement.isDefault,
+        } : null,
+        presnapMovements: (entry.set.presnapMovements || []).map(movement => ({
+          guid: movement.guid,
+          name: movement.name,
+          type: movement.type,
+          isDefault: movement.isDefault,
+          positions: (movement.positions || []).map(compactAlignment),
+        })),
+        packages: entry.set.packages || [],
       } : null,
       play: { ...entry.play, rawMetadata: undefined },
       players: entry.players.map(player => ({
