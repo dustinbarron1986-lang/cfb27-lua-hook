@@ -50,6 +50,29 @@ Route `movementCost` and delay values are also deliberately treated as relative 
 
 ## Current integration boundary
 
-The current Pro Style play-knowledge layer already has receiver-button-to-assignment IDs for a subset of plays. Those IDs are enriched automatically when the local EA index is present, so exact EA route geometry can reach the execution guide.
+The legacy flattened playbook `assignment` numbers are **not** the same namespace as
+`PositionAssignmentDefine.positionAssignId`. They must never be joined directly.
 
-The remaining major linker is the complete play -> all 11 offensive assignments / all 11 defensive assignments relationship. Once that is recovered, the same library can drive full protection/run-gap analysis, defense-vs-offense simulation, and expected-vs-observed player grading.
+The authoritative offensive bridge is now:
+
+```text
+Formation asset
+  -> Set asset
+  -> Play asset
+  -> ordered Play.positionAssignmentDefines[0..10]
+  -> concrete PositionAssignmentDefine assets
+```
+
+Use `scripts/build-ea-play-knowledge.cjs` with the completed Pro Style Formation/Set/Play export
+and the local assignment index. The builder preserves EA-authored Formation, Set, Play,
+alignment, `PlayPassData`, concepts, blocking-scheme references, run-hole metadata, and
+all 11 ordered assignment references. Any missing link is reported as unresolved rather
+than guessed.
+
+`PlayPassData.percentage` is retained as authored metadata; it is not treated as an exact
+QB progression. Read progression remains coordinator-derived until separate evidence
+proves an authored order.
+
+The generated `data/knowledge/pro-style-ea-play-knowledge.json` file is gitignored while
+its size and publication policy are evaluated. Runtime code should consume the compact
+derived index rather than parse hundreds of XML assets at startup.
