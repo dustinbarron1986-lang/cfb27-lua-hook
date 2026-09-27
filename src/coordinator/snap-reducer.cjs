@@ -101,8 +101,10 @@ function transitionEvidence(start, next) {
 
 // Accepted offensive penalties and other administrative no-snap resets can
 // move the ball backward and increase the distance while repeating the same
-// down. They also reset the play clock, but they must NOT become performance
-// snaps. Check this before the generic completed-snap evidence because a
+// down. They must NOT become performance snaps. Do not require a particular
+// play-clock value here: administrative restarts can use different clocks.
+// The unchanged line-to-gain plus repeated down is the stronger football
+// signature. Check this before generic completed-snap evidence because a
 // post-snap accepted penalty may have run game clock even though the play is
 // nullified for coordinator-learning purposes.
 function isAdministrativeReset(start, next, evidence = transitionEvidence(start, next)) {
@@ -115,7 +117,6 @@ function isAdministrativeReset(start, next, evidence = transitionEvidence(start,
     next.quarter === start.quarter &&
     next.down === start.down &&
     !evidence.scoreChanged &&
-    evidence.playClockReset &&
     evidence.fieldMoved &&
     !evidence.lineReset &&
     distanceIncreased;
