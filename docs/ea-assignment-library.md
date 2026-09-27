@@ -76,3 +76,16 @@ proves an authored order.
 The generated `data/knowledge/pro-style-ea-play-knowledge.json` file is gitignored while
 its size and publication policy are evaluated. Runtime code should consume the compact
 derived index rather than parse hundreds of XML assets at startup.
+
+
+## Verified authoritative compiler baseline
+
+The static bridge is now treated as proven for normal offense: Formation -> Set -> default PreSnapMovement PlayerPosition slots 0..10 -> Play positionAssignmentDefines slots 0..10 -> exact PositionAssignment assets.
+
+External refs are resolved with all available authored identity fields: asset path, partition GUID, and instance GUID. Conflicting identities fail closed. The legacy flattened assignment number never acts as a fallback.
+
+The validated Pro Style baseline is 514 plays / 5,654 assignment refs / 5,531 exact resolutions / 123 unresolved refs. All 123 unresolved refs are under Assignments/SpecialTeams/... across 16 plays; normal offense has zero unresolved refs. These are reported separately as partial_special_teams rather than reducing normal-offense confidence.
+
+The assignment index now preserves ordered raw action records as well as normalized semantics. The play builder accepts Formations.zip plus Assignments.zip (or an existing assignment-index JSON) and emits a deduplicated runtime artifact with shared Formation, Set, and Assignment records.
+
+Use provenance labels EA_AUTHORED, RUNTIME_OBSERVED, VERIFIED_MANUAL, DERIVED_STRUCTURAL, and HEURISTIC. PlayPassData percentage remains EA-authored metadata, not a proven QB progression.
