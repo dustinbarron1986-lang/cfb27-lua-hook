@@ -141,20 +141,10 @@ test('index builder preserves collisions instead of overwriting them', () => {
 });
 
 
-test('PlayKnowledgeStore enriches receiver assignment IDs and ExecutionAdvisor derives a coverage-aware read order', () => {
+test('PlayKnowledgeStore refuses the legacy flattened assignment-id namespace', () => {
   const drag = record(DRAG_XML);
-  const slant = {
-    ...drag,
-    positionAssignId: 88,
-    shortName: 'WR_Slant',
-    routeType: 'AssignRouteType_RR_Slant',
-    semantics: {
-      ...drag.semantics,
-      route: { ...drag.semantics.route, routeFamily: 'slant', maxDepth: 8, movementCost: 6 }
-    }
-  };
   const eaStore = new EaAssignmentStore({
-    data: { assignments: { '2044271394': drag, '88': slant } }
+    data: { assignments: { '2044271394': drag } }
   });
   const playStore = new PlayKnowledgeStore({
     autoData: {
@@ -165,8 +155,7 @@ test('PlayKnowledgeStore enriches receiver assignment IDs and ExecutionAdvisor d
               play: 'Test Pass',
               formation: 'Singleback Ace',
               receiverButtons: [
-                { button: 'X', x: -12, y: 0, assignment: 2044271394 },
-                { button: 'Y', x: 8, y: 0, assignment: 88 }
+                { button: 'X', x: -12, y: 0, assignment: 2044271394 }
               ]
             }
           }
@@ -178,38 +167,7 @@ test('PlayKnowledgeStore enriches receiver assignment IDs and ExecutionAdvisor d
   });
 
   const resolved = playStore.resolve(405, 'Singleback Ace', 'Test Pass');
-  assert.equal(resolved.eaAssignmentResolvedCount, 2);
-  assert.equal(resolved.receiverButtons[0].eaAssignmentStatus, 'resolved');
-
-  const advisor = new ExecutionAdvisor({
-    playKnowledgeStore: playStore,
-    knowledgeEngine: {
-      advise() {
-        return {
-          known: true,
-          concept: 'slants',
-          coverage: 'cover_1',
-          pressureDetected: false,
-          coaching: { preSnap: [], postSnap: [] },
-          reasons: []
-        };
-      }
-    }
-  });
-  const result = advisor.advise({
-    selectedPlay: {
-      id: 'test-pass',
-      name: 'Test Pass',
-      formation: 'Singleback Ace',
-      type: 'PASS',
-      primaryConcept: 'slants',
-      concepts: ['slants'],
-      sourcePlaybookId: 405
-    },
-    defensiveCall: { name: 'Cover 1 Robber' }
-  });
-  assert.equal(result.guide.progressionStatus, 'derived');
-  assert.equal(result.guide.diagramMode, 'assignment_geometry');
-  assert.equal(result.guide.receivers.filter(receiver => receiver.assignmentGeometry).length, 2);
-  assert.match(result.guide.warning, /not an EA-authored progression/i);
+  assert.equal(resolved.eaAssignmentResolvedCount, 0);
+  assert.equal(resolved.receiverButtons[0].eaAssignmentStatus, 'legacy_id_not_resolved');
+  assert.equal(resolved.receiverButtons[0].eaAssignment, undefined);
 });
