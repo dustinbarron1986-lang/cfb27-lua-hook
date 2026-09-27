@@ -36,3 +36,7 @@ data/coordinator.db-wal
 data/coordinator.db-shm
 data/coordinator-config.json
 .vscode/
+
+# Generated locally from the private/raw EA Frostbite assignment XML corpus.
+# Keep the parser/generator in git, but do not publish the derived corpus yet.
+data/knowledge/ea-assignment-index.json
