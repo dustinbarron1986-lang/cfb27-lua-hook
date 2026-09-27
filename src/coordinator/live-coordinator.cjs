@@ -298,6 +298,18 @@ function printDefensiveRecommendation(engine, playbooks, state, seenKey, fresh, 
   return key;
 }
 
+function rearmAfterAdministrativeReset(reduced, current, quarantine, io) {
+  if (reduced?.type !== 'administrative_reset' || current?.possession !== 1) {
+    return quarantine;
+  }
+
+  io?.log?.('[COORD] Administrative reset: re-arming CPU offensive call freshness');
+  return {
+    ...quarantine,
+    offense: { available: false },
+  };
+}
+
 function handleNewSituation(engine, playbooks, current, lastSituationKey, situationKey, io, coordinatorWindow) {
   // Only log when the key actually changed (never spam per-tick) -- this is
   // the diagnostic signal to confirm, in a live retest, that this reset path
@@ -539,10 +551,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
           // as a new generation so the DC is not left permanently pending.
           // The reducer emitted administrative_reset specifically so this does
           // not fabricate a completed snap or pollute performance history.
-          if (reduced.type === 'administrative_reset' && current.possession === 1) {
-            quarantine.offense = { available: false };
-            io.log('[COORD] Administrative reset: re-arming CPU offensive call freshness');
-          }
+          quarantine = rearmAfterAdministrativeReset(reduced, current, quarantine, io);
 
           lastSituationKey = situationKey;
           lastExecutionKey = null;
@@ -592,6 +601,7 @@ module.exports = {
   updateSideFreshness,
   updateFreshness,
   logFreshnessTransitions,
+  rearmAfterAdministrativeReset,
   createPlaybookService,
   playbookLogLine,
 };
