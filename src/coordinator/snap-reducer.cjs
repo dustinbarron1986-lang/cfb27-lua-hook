@@ -79,10 +79,6 @@ function transitionEvidence(start, next) {
   const scoreChanged = next.homeScore !== start.homeScore || next.awayScore !== start.awayScore;
   const clockRan = next.gameClockSeconds < start.gameClockSeconds || quarterChanged;
   const fieldMoved = Math.abs(next.fieldX - start.fieldX) >= 0.35;
-  const startDistance = finite(start.distance);
-  const nextDistance = finite(next.distance);
-  const distanceChanged = startDistance != null && nextDistance != null &&
-    Math.abs(nextDistance - startDistance) >= 0.25;
 
   return {
     downChanged,
@@ -93,7 +89,6 @@ function transitionEvidence(start, next) {
     scoreChanged,
     clockRan,
     fieldMoved,
-    distanceChanged,
     completed: possessionChanged || scoreChanged || downChanged ||
       (clockRan && fieldMoved && (playClockReset || lineReset)),
   };
