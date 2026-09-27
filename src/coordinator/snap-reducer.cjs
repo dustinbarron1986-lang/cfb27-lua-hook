@@ -79,6 +79,10 @@ function transitionEvidence(start, next) {
   const scoreChanged = next.homeScore !== start.homeScore || next.awayScore !== start.awayScore;
   const clockRan = next.gameClockSeconds < start.gameClockSeconds || quarterChanged;
   const fieldMoved = Math.abs(next.fieldX - start.fieldX) >= 0.35;
+  const startDistance = finite(start.distance);
+  const nextDistance = finite(next.distance);
+  const distanceChanged = startDistance != null && nextDistance != null &&
+    Math.abs(nextDistance - startDistance) >= 0.25;
 
   return {
     downChanged,
@@ -89,9 +93,32 @@ function transitionEvidence(start, next) {
     scoreChanged,
     clockRan,
     fieldMoved,
+    distanceChanged,
     completed: possessionChanged || scoreChanged || downChanged ||
       (clockRan && fieldMoved && (playClockReset || lineReset)),
   };
+}
+
+// Accepted offensive penalties and other administrative no-snap resets can
+// move the ball backward and increase the distance while repeating the same
+// down. They also reset the play clock, but they must NOT become performance
+// snaps. Check this before the generic completed-snap evidence because a
+// post-snap accepted penalty may have run game clock even though the play is
+// nullified for coordinator-learning purposes.
+function isAdministrativeReset(start, next, evidence = transitionEvidence(start, next)) {
+  const startDistance = finite(start.distance);
+  const nextDistance = finite(next.distance);
+  const distanceIncreased = startDistance != null && nextDistance != null &&
+    nextDistance >= startDistance + 0.25;
+
+  return next.possession === start.possession &&
+    next.quarter === start.quarter &&
+    next.down === start.down &&
+    !evidence.scoreChanged &&
+    evidence.playClockReset &&
+    evidence.fieldMoved &&
+    !evidence.lineReset &&
+    distanceIncreased;
 }
 
 function buildCompletedSnap(start, next) {
@@ -146,6 +173,12 @@ class SnapReducer {
     // During the pre-snap period, continuously refresh the anchor so the last selected
     // play/set and the lowest play clock are captured before the snap.
     const evidence = transitionEvidence(this.anchor, next);
+    if (isAdministrativeReset(this.anchor, next, evidence)) {
+      this.anchor = next;
+      this.last = next;
+      return { type: 'administrative_reset', state: next, evidence };
+    }
+
     if (!evidence.completed) {
       const sameSituation = next.possession === this.anchor.possession &&
         next.down === this.anchor.down &&
@@ -170,6 +203,7 @@ module.exports = {
   validState,
   offenseDirection,
   transitionEvidence,
+  isAdministrativeReset,
   buildCompletedSnap,
   callFromState,
 };
