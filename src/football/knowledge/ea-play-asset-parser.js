@@ -22,12 +22,26 @@ function child(node, name) {
   return children(node, name)[0] || null;
 }
 
+function splitFrostbiteRef(value) {
+  if (value == null) return { ref: null, assetPath: null };
+  const text = String(value).trim();
+  if (!text || text.toLowerCase() === 'null') return { ref: null, assetPath: null };
+  const slash = text.lastIndexOf('\\');
+  if (slash < 0) return { ref: text, assetPath: null };
+  return {
+    assetPath: text.slice(0, slash) || null,
+    ref: text.slice(slash + 1) || null,
+  };
+}
+
 function pointerFromNode(node) {
   if (!node) return null;
   const attrs = node.attrs || {};
-  const ref = attrs.ref || attrs.instanceGuid || attrs.guid || null;
+  const split = splitFrostbiteRef(attrs.ref || attrs.instanceGuid || attrs.guid || null);
   const partitionGuid = attrs.partitionGuid || attrs.fileGuid || null;
-  const assetPath = attrs.assetPath || attrs.path || ((node.name === 'import' || node.name === 'external') ? attrs.name : null);
+  const assetPath = split.assetPath || attrs.assetPath || attrs.path ||
+    ((node.name === 'import' || node.name === 'external') ? attrs.name : null);
+  const ref = split.ref;
   if (!ref && !partitionGuid && !assetPath) return null;
   return { ref, partitionGuid, assetPath };
 }
@@ -118,6 +132,7 @@ function parsePartition(xmlText, options = {}) {
     primaryGuid,
     primary,
     instances,
+    byGuid: new Map(instances.map(instance => [instance.guid, instance])),
   };
 }
 
@@ -137,41 +152,95 @@ function stringValue(value) {
 
 function refValue(value) {
   if (value == null) return null;
-  if (typeof value === 'string') return { ref: value, partitionGuid: null, assetPath: null };
+  if (typeof value === 'string') {
+    const split = splitFrostbiteRef(value);
+    if (!split.ref && !split.assetPath) return null;
+    return { ref: split.ref, partitionGuid: null, assetPath: split.assetPath };
+  }
   if (typeof value !== 'object') return null;
-  return {
-    ref: value.ref || value.instanceGuid || value.guid || null,
-    partitionGuid: value.partitionGuid || value.fileGuid || null,
-    assetPath: value.assetPath || value.path || value.name || stringValue(value) || null,
-  };
+  const split = splitFrostbiteRef(value.ref || value.instanceGuid || value.guid || null);
+  const ref = split.ref;
+  const partitionGuid = value.partitionGuid || value.fileGuid || null;
+  const assetPath = value.assetPath || value.path || split.assetPath || null;
+  if (!ref && !partitionGuid && !assetPath) return null;
+  return { ref, partitionGuid, assetPath };
 }
 
-function normalizePosition(row, index) {
-  const raw = row && typeof row === 'object' ? row : { value: row };
-  const explicit = first(raw, ['index', 'positionIndex', 'playerIndex', 'slotIndex']);
+function dereference(partition, value, expectedType = null) {
+  const ref = refValue(value);
+  if (!ref?.ref || ref.partitionGuid || ref.assetPath) return null;
+  const instance = partition.byGuid.get(ref.ref) || null;
+  if (!instance) return null;
+  if (expectedType && instance.type !== expectedType) return null;
+  return instance;
+}
+
+function normalizePosition(row, index = null) {
+  const raw = row?.fields || (row && typeof row === 'object' ? row : { value: row });
+  const explicit = first(raw, ['posOrder', 'index', 'positionIndex', 'playerIndex', 'slotIndex']);
+  const resolvedIndex = explicit != null && Number.isFinite(Number(explicit))
+    ? Number(explicit)
+    : index;
   return {
-    index: explicit != null && Number.isFinite(Number(explicit)) ? Number(explicit) : index,
-    positionType: first(raw, ['positionType', 'position', 'playPosition', 'playerPosition']) || null,
-    depthPosition: first(raw, ['depthPosition', 'depthPos', 'depth']) || null,
-    x: first(raw, ['x', 'X', 'posX', 'positionX']) ?? null,
-    y: first(raw, ['y', 'Y', 'posY', 'positionY']) ?? null,
+    index: resolvedIndex,
+    positionType: first(raw, ['positionType', 'position', 'playPosition', 'playerPosition', 'depthPosition']) || null,
+    depthPosition: first(raw, ['depthPosition', 'depthPos']) || null,
+    depth: first(raw, ['depth', 'Depth']) ?? null,
+    x: first(raw, ['XPos', 'x', 'X', 'posX', 'positionX']) ?? null,
+    y: first(raw, ['YPos', 'y', 'Y', 'posY', 'positionY']) ?? null,
+    flippedX: first(raw, ['flippedXPos', 'flippedX']) ?? null,
+    flippedY: first(raw, ['flippedYPos', 'flippedY']) ?? null,
+    facing: first(raw, ['facing']) ?? null,
+    flippedFacing: first(raw, ['flippedFacing']) ?? null,
     packagePosition: first(raw, ['packagePosition', 'setPackagePosition', 'packagePos']) || null,
-    flipIndex: first(raw, ['flipIndex', 'flipPositionIndex', 'flippedIndex']) ?? null,
-    presnapMovement: first(raw, ['presnapMovement', 'preSnapMovement', 'movement', 'autoMotion']) || null,
+    flipIndex: first(raw, ['flipAssign', 'flipIndex', 'flipPositionIndex', 'flippedIndex']) ?? null,
+    groupType: first(raw, ['groupType']) || null,
+    primaryMotionMan: first(raw, ['primaryMotionMan']) ?? null,
+    guid: row?.guid || null,
     raw,
   };
 }
 
-function findArray(arrays, preferredNames, predicate = null) {
-  for (const name of preferredNames) {
-    if (Array.isArray(arrays?.[name])) return arrays[name];
-  }
-  if (predicate) {
-    for (const [name, value] of Object.entries(arrays || {})) {
-      if (Array.isArray(value) && predicate(name, value)) return value;
-    }
-  }
-  return [];
+function normalizeMovement(partition, instance) {
+  if (!instance) return null;
+  const positionRefs = instance.arrays.PlayerPosition || [];
+  const positions = positionRefs.map((ref, index) => {
+    const resolved = dereference(partition, ref, 'SetPosition');
+    return resolved
+      ? normalizePosition(resolved, index)
+      : { index, guid: refValue(ref)?.ref || null, unresolved: true, raw: ref };
+  });
+  return {
+    guid: instance.guid,
+    name: first(instance.fields, ['name', 'Name']) || null,
+    type: first(instance.fields, ['type', 'Type']) || null,
+    isDefault: Boolean(first(instance.fields, ['isDefault', 'IsDefault'])),
+    positions,
+    raw: instance.raw,
+  };
+}
+
+function normalizePackage(partition, instance) {
+  if (!instance) return null;
+  const rows = (instance.arrays.packagePositions || []).map((ref, index) => {
+    const resolved = dereference(partition, ref, 'SetPackagePosition');
+    const raw = resolved?.fields || {};
+    return {
+      index,
+      order: first(raw, ['order', 'Order']) ?? index,
+      position: first(raw, ['position', 'Position']) || null,
+      depth: first(raw, ['Depth', 'depth']) ?? null,
+      guid: resolved?.guid || refValue(ref)?.ref || null,
+      raw,
+      unresolved: !resolved,
+    };
+  });
+  return {
+    guid: instance.guid,
+    name: first(instance.fields, ['name', 'Name']) || null,
+    positions: rows,
+    raw: instance.raw,
+  };
 }
 
 function parseFormationXml(xmlText, options = {}) {
@@ -179,7 +248,7 @@ function parseFormationXml(xmlText, options = {}) {
   const f = partition.primary.fields;
   return {
     kind: 'formation',
-    name: stringValue(first(f, ['Name', 'formationName', 'name'])),
+    name: stringValue(first(f, ['formationName', 'name', 'Name'])),
     formationType: first(f, ['formationType', 'FormationType']) || null,
     formId: first(f, ['formId', 'formationId', 'FormId']) ?? null,
     assetPath: stringValue(first(f, ['Name', 'assetPath', 'path'])),
@@ -194,27 +263,30 @@ function parseFormationXml(xmlText, options = {}) {
 function parseSetXml(xmlText, options = {}) {
   const partition = parsePartition(xmlText, options);
   const f = partition.primary.fields;
-  const arrays = partition.primary.arrays;
-  const positionRows = findArray(
-    arrays,
-    ['SetPosition', 'setPositions', 'positions', 'positionDefines'],
-    name => /set.*position|positions?/i.test(name) && !/package/i.test(name),
-  );
-  const packageRows = findArray(
-    arrays,
-    ['SetPackagePosition', 'setPackagePositions', 'packagePositions'],
-    name => /package.*position/i.test(name),
-  );
-  const formationRef = refValue(first(f, ['Formation', 'formation', 'FormationDefine', 'formationDefine', 'formationAsset']));
+  const formationRef = refValue(first(f, ['form', 'Formation', 'formation', 'FormationDefine', 'formationDefine', 'formationAsset']));
+
+  const movementRefs = partition.primary.arrays.preSnapMovements || [];
+  const presnapMovements = movementRefs
+    .map(ref => normalizeMovement(partition, dereference(partition, ref, 'PreSnapMovement')))
+    .filter(Boolean);
+  const defaultMovement = presnapMovements.find(movement => movement.isDefault) || null;
+
+  const packageRefs = partition.primary.arrays.packages || [];
+  const packages = packageRefs
+    .map(ref => normalizePackage(partition, dereference(partition, ref, 'SetPackage')))
+    .filter(Boolean);
+
   return {
     kind: 'set',
-    name: stringValue(first(f, ['setName', 'Name', 'name'])),
+    name: stringValue(first(f, ['setName', 'name', 'Name'])),
     setId: first(f, ['setId', 'SetId']) ?? null,
     assetPath: stringValue(first(f, ['Name', 'assetPath', 'path'])),
     formationRef,
     formationAssetPath: formationRef?.assetPath || null,
-    positions: positionRows.map(normalizePosition),
-    packagePositions: packageRows.map((row, index) => ({ index, raw: row })),
+    positions: defaultMovement?.positions || [],
+    defaultPresnapMovement: defaultMovement,
+    presnapMovements,
+    packages,
     partitionGuid: partition.partitionGuid,
     primaryGuid: partition.primary.guid,
     sourceFile: partition.sourceFile,
@@ -224,8 +296,9 @@ function parseSetXml(xmlText, options = {}) {
 }
 
 function normalizePassData(row) {
-  const raw = row && typeof row === 'object' ? row : { value: row };
+  const raw = row?.fields || (row && typeof row === 'object' ? row : { value: row });
   return {
+    guid: row?.guid || null,
     position: first(raw, ['position', 'Position']) ?? null,
     combo: first(raw, ['combo', 'Combo']) ?? null,
     percentage: first(raw, ['percentage', 'Percentage']) ?? null,
@@ -238,26 +311,32 @@ function parsePlayXml(xmlText, options = {}) {
   const partition = parsePartition(xmlText, options);
   const f = partition.primary.fields;
   const arrays = partition.primary.arrays;
-  const assignmentRows = findArray(
-    arrays,
-    ['positionAssignmentDefines'],
-    name => /positionAssignmentDefines/i.test(name),
-  );
-  const passRows = findArray(
-    arrays,
-    ['passData', 'PlayPassData', 'playPassData'],
-    name => /pass.*data/i.test(name),
-  );
+  const assignmentRows = arrays.positionAssignmentDefines || [];
+  const passRows = arrays.passData || [];
   const setRef = refValue(first(f, ['Set', 'set', 'SetDefine', 'setDefine', 'setAsset']));
   const blockingSchemeRef = refValue(first(f, ['BlockingSchemeDefine', 'blockingSchemeDefine', 'blockingScheme']));
   const coverageSchemeRef = refValue(first(f, ['CoverageSchemeDefine', 'coverageSchemeDefine', 'coverageScheme']));
-  const positionAssignmentDefines = assignmentRows.map((value, index) => ({ index, ...refValue(value), raw: value }));
-  const passData = passRows.map(normalizePassData);
+  const positionAssignmentDefines = assignmentRows.map((value, index) => ({
+    index,
+    ...refValue(value),
+    raw: value,
+  }));
+  const passData = passRows.map(value => {
+    const resolved = dereference(partition, value, 'PlayPassData');
+    return resolved
+      ? normalizePassData(resolved)
+      : { ...normalizePassData(value), unresolved: true, ref: refValue(value) };
+  });
   const concepts = [...new Set(passData.map(row => row.concept).filter(Boolean).map(String))];
+
+  const additionalPresnapMovements = (arrays.AdditionalPreSnapMovements || [])
+    .map(ref => normalizeMovement(partition, dereference(partition, ref, 'PreSnapMovement')))
+    .filter(Boolean);
+
   return {
     kind: 'play',
-    name: stringValue(first(f, ['playName', 'Name', 'name'])),
-    playName: stringValue(first(f, ['playName', 'Name', 'name'])),
+    name: stringValue(first(f, ['playName', 'name', 'Name'])),
+    playName: stringValue(first(f, ['playName', 'name', 'Name'])),
     playId: first(f, ['playId', 'PlayId']) ?? null,
     assetPath: stringValue(first(f, ['Name', 'assetPath', 'path'])),
     setRef,
@@ -267,12 +346,14 @@ function parsePlayXml(xmlText, options = {}) {
     coverageSchemeRef,
     passData,
     concepts,
+    additionalPresnapMovements,
     offensePlayType: first(f, ['offensePlayType', 'OffensePlayType']) || null,
     defensePlayType: first(f, ['defensePlayType', 'DefensePlayType']) || null,
     runHole: first(f, ['runHole', 'RunHole']) ?? null,
     flowType: first(f, ['FlowType', 'flowType']) || null,
     allowHotRoutes: first(f, ['allowHotRoutes', 'AllowHotRoutes']) ?? null,
     enableMotion: first(f, ['enableMotion', 'EnableMotion']) ?? null,
+    disableMotion: first(f, ['disableMotion', 'DisableMotion']) ?? null,
     passShort: first(f, ['passShort', 'PassShort']) ?? null,
     passMedium: first(f, ['passMedium', 'PassMedium']) ?? null,
     passLong: first(f, ['passLong', 'PassLong']) ?? null,
@@ -287,10 +368,9 @@ function parsePlayXml(xmlText, options = {}) {
 function detectEaAssetKind(xmlText) {
   const partition = parsePartition(xmlText);
   const type = String(partition.primary.type || '').toLowerCase();
-  const names = new Set([...Object.keys(partition.primary.fields), ...Object.keys(partition.primary.arrays)]);
-  if (names.has('positionAssignmentDefines') || type === 'play' || /playdefine/.test(type)) return 'play';
-  if (names.has('setId') || names.has('setName') || [...names].some(name => /set.*position/i.test(name))) return 'set';
-  if (names.has('formId') || names.has('formationType') || /formation/.test(type)) return 'formation';
+  if (type === 'play' || /playdefine/.test(type)) return 'play';
+  if (type === 'set' || type.endsWith('set')) return 'set';
+  if (type === 'formation' || /formation/.test(type)) return 'formation';
   return null;
 }
 
@@ -309,6 +389,7 @@ module.exports = {
   parsePlayXml,
   parseEaAssetXml,
   detectEaAssetKind,
+  splitFrostbiteRef,
   refValue,
   normalizePosition,
 };
