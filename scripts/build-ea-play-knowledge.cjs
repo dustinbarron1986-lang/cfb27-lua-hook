@@ -111,15 +111,17 @@ function compactRuntimeIndex(compiled) {
         };
       }
 
-      return {
+      const runtimePlayer = {
         index: player.index,
-        startingAlignment: compactAlignment(player.startingAlignment),
         assignmentKey,
-        assignmentRef: player.assignmentRef,
         resolutionStatus: player.resolutionStatus,
-        specialTeamsUnresolved: player.specialTeamsUnresolved,
         source: player.source,
       };
+      if (!assignmentKey) {
+        runtimePlayer.assignmentRef = player.assignmentRef;
+        runtimePlayer.specialTeamsUnresolved = player.specialTeamsUnresolved;
+      }
+      return runtimePlayer;
     });
 
     plays[playKey] = {
