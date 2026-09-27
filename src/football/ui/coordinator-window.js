@@ -453,7 +453,23 @@ function receiverPoint(receiver) {
   const sy = Number.isFinite(y) ? Math.max(70, Math.min(198, 164 + (-y) * 4.0)) : 150;
   return [sx, sy];
 }
+function exactAssignmentRoute(receiver) {
+  const points = receiver?.assignmentGeometry?.points || [];
+  if (points.length < 2) return null;
+  const [sx, sy] = receiverPoint(receiver);
+  const scale = 4;
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+  return points.map((point, index) => {
+    const rx = Number(point.relativeX ?? point.x ?? 0);
+    const ry = Number(point.relativeY ?? point.y ?? 0);
+    const x = clamp(sx + (Number.isFinite(rx) ? rx : 0) * scale, 16, 324);
+    const y = clamp(sy - (Number.isFinite(ry) ? ry : 0) * scale, 20, 198);
+    return (index === 0 ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1);
+  }).join(' ');
+}
 function assignmentRoute(receiver) {
+  const exact = exactAssignmentRoute(receiver);
+  if (exact) return exact;
   const [sx, sy] = receiverPoint(receiver);
   const inward = sx < 170 ? 1 : -1;
   switch (receiver?.routeFamily) {
@@ -484,7 +500,7 @@ function partialAssignmentDiagram(guide) {
   return svg;
 }
 function passDiagram(guide) {
-  if (guide?.diagramMode === 'assignment_partial') return partialAssignmentDiagram(guide);
+  if (guide?.diagramMode === 'assignment_partial' || guide?.diagramMode === 'assignment_geometry') return partialAssignmentDiagram(guide);
   const paths = guide?.paths || [];
   const ends = [[268,54],[212,92],[298,120]];
   const estimated = guide?.diagramMode !== 'verified';
@@ -530,12 +546,13 @@ function renderGuide(guide) {
   }
 
   const verified = guide.progressionStatus === 'verified' && (guide.reads || []).length;
+  const derived = guide.progressionStatus === 'derived' && (guide.reads || []).length;
   const targets = guide.targets || [];
   const receivers = guide.receivers || [];
   let body = '';
-  let title = verified ? 'READ IN THIS ORDER' : 'WHAT WE KNOW';
+  let title = verified ? 'READ IN THIS ORDER' : (derived ? 'DERIVED READ ORDER' : 'WHAT WE KNOW');
 
-  if (verified) {
+  if (verified || derived) {
     body = (guide.reads || []).map(r => '<div class="guideRow"><div class="guideNum">'+esc(r.button || r.number)+'</div><div><div class="guideLabel">'+esc(r.label)+'</div><div class="guideText">'+esc(r.detail)+'</div></div></div>').join('');
   } else if (targets.length) {
     title = 'ROUTES WE CAN IDENTIFY';
