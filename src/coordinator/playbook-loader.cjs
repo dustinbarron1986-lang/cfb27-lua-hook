@@ -97,21 +97,17 @@ function loadOffensePlaybookFromDatabase(repoRoot, config) {
   }
 }
 
-// Unlike offense, there is no persisted/verified defensive playbook selection
-// anywhere in the recovered data (no verified-membership overlay for any of the
-// 41 defense playbooks in the DB, and the `games` table has no defense_playbook
-// column) -- so, unlike loadOffensePlaybookFromDatabase, this NEVER activates by
-// itself. It only loads from the DB when the caller explicitly names a playbook
-// via config.defensePlaybookId, so we never guess which of the 41 catalog
-// defense playbooks corresponds to the user's real active one.
+// Load the user's saved defensive selection, or an explicit runtime override.
+// The recovered game data cannot identify the user's active defensive book,
+// so an unset selection still falls back to the sample rather than guessing.
 function loadDefensePlaybookFromDatabase(repoRoot, config) {
-  if (config.defensePlaybookId == null) return null;
-
   let CoordinatorDatabase;
   let DatabasePlaybookRepository;
+  let loadCoordinatorConfig;
   try {
     ({ CoordinatorDatabase } = require('../football/db/coordinator-database'));
     ({ DatabasePlaybookRepository } = require('../football/playbooks/database-playbook-repository'));
+    ({ loadCoordinatorConfig } = require('../football/config/coordinator-config'));
   } catch (_) {
     return null;
   }
@@ -119,11 +115,16 @@ function loadDefensePlaybookFromDatabase(repoRoot, config) {
   const dbPath = resolvePath(repoRoot, config.coordinatorDatabase, 'data/coordinator.db');
   if (!fs.existsSync(dbPath)) return null;
 
+  const configPath = resolvePath(repoRoot, config.coordinatorConfig, 'data/coordinator-config.json');
+  const saved = loadCoordinatorConfig(configPath);
+  const selector = config.defensePlaybookId ?? saved?.defensePlaybookId;
+  if (selector == null) return null;
+
   let database = null;
   try {
     database = new CoordinatorDatabase({ dbPath, readOnly: true });
     const repo = new DatabasePlaybookRepository(database);
-    const book = repo.get(config.defensePlaybookId, { side: 'defense' });
+    const book = repo.get(selector, { side: 'defense' });
     if (!book || !Array.isArray(book.plays) || !book.plays.length) return null;
 
     return {

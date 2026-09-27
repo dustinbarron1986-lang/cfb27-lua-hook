@@ -268,6 +268,8 @@ function printDefensiveRecommendation(engine, playbooks, state, seenKey, fresh, 
     situation: situationFromState(state),
     limit: 3,
   });
+  const pool = ranked.candidatePool;
+  io.log(`[DC] POOL: total=${pool.total} eligible=${pool.eligible} specialTeams=${pool.excludedSpecialTeams} situational=${pool.excludedSituational} unknown=${pool.excludedUnknown}`);
   const top = ranked.recommendations[0];
 
   if (!top) {

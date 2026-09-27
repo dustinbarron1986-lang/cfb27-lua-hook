@@ -207,15 +207,56 @@ test('restart/reload restores the persisted defense 501 selection', () => {
     database.close();
   }
   try {
-    // Simulate a fresh process: brand-new DB handle/service reading the same config file.
-    const database2 = new CoordinatorDatabase({ dbPath, readOnly: true });
-    try {
-      const book = loadDefensePlaybookFromDatabase(root, { defensePlaybookId: loadCoordinatorConfig(configPath).defensePlaybookId });
-      assert.equal(book.id, '501');
-      assert.equal(book.name, '3-3-5');
-    } finally {
-      database2.close();
-    }
+    // Exercise the actual startup loader without manually passing the saved ID.
+    const reloaded = loadPlaybooks(root, { coordinatorConfig: configPath });
+    assert.equal(reloaded.offense.id, '405');
+    assert.equal(reloaded.offense.name, 'Pro Style');
+    assert.equal(reloaded.offense.plays.length, 486);
+    assert.equal(reloaded.defense.id, '501');
+    assert.equal(reloaded.defense.name, '3-3-5');
+    assert.equal(reloaded.defense.plays.length, 210);
+    assert.equal(reloaded.paths.defense, 'database:501');
+
+    const engine = new FootballEngine();
+    const ranked = engine.recommendDefenses({
+      playbook: reloaded.defense,
+      offensePlay: { id: 'x', name: 'Shock H Option', concepts: ['choice_option'] },
+      situation: { down: 2, distance: 7, yardLine: 40 },
+      limit: 3,
+    });
+    assert.equal(ranked.candidatePool.total, reloaded.defense.plays.length);
+    assert.notEqual(ranked.candidatePool.total, 2);
+  } finally {
+    fs.rmSync(configPath, { force: true });
+  }
+});
+
+test('explicit defense selection overrides the persisted selection on startup', () => {
+  const configPath = tmpConfigPath();
+  try {
+    saveCoordinatorConfig({
+      offensePlaybookId: 405, offensePlaybookName: 'Pro Style',
+      defensePlaybookId: 501, defensePlaybookName: '3-3-5',
+    }, configPath);
+    const loaded = loadPlaybooks(root, { coordinatorConfig: configPath, defensePlaybookId: 503 });
+    assert.equal(loaded.defense.id, '503');
+    assert.equal(loaded.defense.plays.length, 222);
+    assert.equal(loaded.paths.defense, 'database:503');
+    assert.equal(loaded.offense.id, '405');
+  } finally {
+    fs.rmSync(configPath, { force: true });
+  }
+});
+
+test('startup without a saved defense selection retains the sample fallback', () => {
+  const configPath = tmpConfigPath();
+  try {
+    saveCoordinatorConfig({ offensePlaybookId: 405, offensePlaybookName: 'Pro Style' }, configPath);
+    const loaded = loadPlaybooks(root, { coordinatorConfig: configPath });
+    assert.equal(loaded.defense.plays.length, 2);
+    assert.equal(loaded.defense.status, 'sample-only');
+    assert.ok(loaded.paths.defense.endsWith('3-4-zone-pressure.sample.json'));
+    assert.equal(loaded.offense.id, '405');
   } finally {
     fs.rmSync(configPath, { force: true });
   }
