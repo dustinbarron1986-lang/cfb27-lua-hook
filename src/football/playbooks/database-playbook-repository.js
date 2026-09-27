@@ -4,7 +4,7 @@ const {
   normalizeMembershipName,
   inferFallbackMetadata
 } = require('./verified-membership');
-const { PlayLocationIndex, displayFormation } = require('./play-location-index');
+const { PlayLocationIndex, displayFormationForPlaybook } = require('./play-location-index');
 
 function verifiedId(bookId, formation, name) {
   const slug = value => normalizeMembershipName(value).replace(/\s+/g, '-');
@@ -168,7 +168,9 @@ class DatabasePlaybookRepository {
       formationName: location?.formationName ?? null,
       setId: def.setId,
       setName: location?.setName ?? null,
-      formation: location ? displayFormation(location.formationName, location.setName) : null,
+      formation: location
+        ? displayFormationForPlaybook(book.id, def.formationId, def.setId, location.formationName, location.setName)
+        : null,
       runHole: def.runHole,
       concepts: def.concepts || [],
       primaryConcept: def.primaryConcept || null,
