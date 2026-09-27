@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, '..');
 const { FootballEngine } = require('../src/football/engine');
 const { CoordinatorWindow } = require('../src/football/ui/coordinator-window');
 const { loadPlaybooks } = require('../src/coordinator/playbook-loader.cjs');
+const { SnapReducer } = require('../src/coordinator/snap-reducer.cjs');
 const {
   handleNewSituation,
   printExecutionAdvice,
@@ -284,4 +285,33 @@ test('the situation-boundary log only fires when the key actually changes, not e
 
   const boundaryLogs = logs.filter(l => l.includes('[COORD] Situation boundary:'));
   assert.equal(boundaryLogs.length, 2, 'expected exactly one boundary log for the initial key and one for the single real change');
+});
+
+
+test('accepted offensive penalty is an administrative reset, not a completed snap', () => {
+  const reducer = new SnapReducer();
+  const start = {
+    possession: 1, quarter: 1, down: 1, distance: 10, yardLine: 49,
+    fieldX: -1, fieldY: 0, lineToGain: 9, gameClockSeconds: 116, playClockSeconds: 12,
+    homeScore: 0, awayScore: 0,
+    offensiveCallAvailable: true, offensiveCallStatus: 'ok', offensiveSide: 1,
+    offensiveSet: 'Strong Trips Over', offensivePlay: 'Inside Zone Split', offensivePlayId: 501,
+    defensiveCallAvailable: true, defensiveCallStatus: 'ok', defensiveSide: 0,
+    defensiveSet: '3 High', defensivePlay: '3 Double Buzz', defensivePlayId: 601,
+  };
+  const penalized = {
+    ...start,
+    distance: 20,
+    fieldX: -11,
+    yardLine: 39,
+    playClockSeconds: 25,
+  };
+
+  assert.equal(reducer.ingest(start).type, 'situation');
+  const result = reducer.ingest(penalized);
+
+  assert.equal(result.type, 'administrative_reset');
+  assert.equal(result.state.down, 1);
+  assert.equal(result.state.distance, 20);
+  assert.equal(reducer.serial, 0, 'penalty reset must not increment snap serial');
 });

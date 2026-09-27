@@ -3,6 +3,14 @@ const path = require('path');
 
 const DEFAULT_PLAY_LOCATIONS_PATH = path.join(__dirname, '../../../data/playbooks/cfb27-play-locations.json');
 
+// Live telemetry can expose a newer/current in-game display name than the raw
+// Frosty export used to build cfb27-play-locations.json. Keep these overrides
+// narrowly scoped to an exact playbook + formationId + setId so we do not
+// collapse distinct formations globally or rewrite the raw provenance data.
+const LIVE_DISPLAY_FORMATION_OVERRIDES = Object.freeze({
+  '522:17:1070': '3-3 Mint',
+});
+
 function loadJson(filePath, fallback) {
   if (!fs.existsSync(filePath)) return fallback;
   try {
@@ -52,4 +60,15 @@ function displayFormation(formationName, setName) {
   return null;
 }
 
-module.exports = { PlayLocationIndex, displayFormation, DEFAULT_PLAY_LOCATIONS_PATH };
+function displayFormationForPlaybook(playbookId, formationId, setId, formationName, setName) {
+  const key = `${playbookId}:${formationId}:${setId}`;
+  return LIVE_DISPLAY_FORMATION_OVERRIDES[key] || displayFormation(formationName, setName);
+}
+
+module.exports = {
+  PlayLocationIndex,
+  displayFormation,
+  displayFormationForPlaybook,
+  DEFAULT_PLAY_LOCATIONS_PATH,
+  LIVE_DISPLAY_FORMATION_OVERRIDES,
+};
