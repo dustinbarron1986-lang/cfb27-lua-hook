@@ -16,7 +16,7 @@ const {
   playbookIdFromFilename,
   sortedPlaybooks,
 } = require('../scripts/build-play-locations.cjs');
-const { PlayLocationIndex, displayFormation } = require('../src/football/playbooks/play-location-index');
+const { PlayLocationIndex, displayFormation, displayFormationForPlaybook } = require('../src/football/playbooks/play-location-index');
 const { CoordinatorDatabase } = require('../src/football/db/coordinator-database');
 const { DatabasePlaybookRepository } = require('../src/football/playbooks/database-playbook-repository');
 const { printDefensiveRecommendation } = require('../src/coordinator/live-coordinator.cjs');
@@ -154,6 +154,12 @@ test('displayFormation combinations', () => {
   assert.equal(displayFormation('3-4', null), '3-4');
   assert.equal(displayFormation(null, 'Grizzly'), 'Grizzly');
   assert.equal(displayFormation(null, null), null);
+});
+
+test('playbook 522 set 17:1070 uses the live-verified in-game 3-3 Mint display label only for that exact identity', () => {
+  assert.equal(displayFormationForPlaybook(522, 17, 1070, 'Nickel', '3-3 Odd'), '3-3 Mint');
+  assert.equal(displayFormationForPlaybook(521, 17, 1070, 'Nickel', '3-3 Odd'), 'Nickel 3-3 Odd');
+  assert.equal(displayFormationForPlaybook(522, 17, 2608386723, 'Nickel', '3-3 Single Mug'), 'Nickel 3-3 Single Mug');
 });
 
 // ---- Repository integration ----
