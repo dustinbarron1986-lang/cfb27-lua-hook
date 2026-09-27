@@ -235,6 +235,7 @@ test('end-to-end: a live defensive recommendation for 1 Edge Pinch exposes "3-4 
     assert.equal(edgePinch.formation, '3-4 Grizzly');
     engine.recommendDefenses = () => ({
       situation: {}, exactOffense: null, evaluated: 1,
+      candidatePool: { total: 1, eligible: 1, excludedSpecialTeams: 0, excludedSituational: 0, excludedUnknown: 0 },
       recommendations: [{ play: edgePinch, score: 1, components: {}, reasons: ['test'], diagnostic: {} }],
     });
 

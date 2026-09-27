@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
@@ -310,9 +311,18 @@ test('CoordinatorWindow accepts/renders the defensive recommendation state', () 
 });
 
 test('default playbook loading keeps the sample fallback when no defense selection is saved', () => {
-  const playbooks = loadPlaybooks(root, {});
-  assert.equal(playbooks.defense.plays.length, 2);
-  assert.equal(playbooks.defense.status, 'sample-only');
+  // Isolated from the developer's real data/coordinator-config.json (which may
+  // have a saved defensive selection) -- this points at a temp dir containing
+  // no config file at all, so loadCoordinatorConfig() sees no saved selection.
+  const isolatedConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfb27-no-coordinator-config-'));
+  const isolatedConfigPath = path.join(isolatedConfigDir, 'coordinator-config.json');
+  try {
+    const playbooks = loadPlaybooks(root, { coordinatorConfig: isolatedConfigPath });
+    assert.equal(playbooks.defense.plays.length, 2);
+    assert.equal(playbooks.defense.status, 'sample-only');
+  } finally {
+    fs.rmSync(isolatedConfigDir, { recursive: true, force: true });
+  }
 });
 
 test('an explicit defensePlaybookId override can load a real DB-backed defensive playbook', () => {
