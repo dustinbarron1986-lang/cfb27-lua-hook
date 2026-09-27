@@ -49,7 +49,8 @@ function buildPassingPlayArt(receivers = []) {
     if (!translated) continue;
     targets.push({
       button: receiver.button || null,
-      assignmentId: receiver.assignment ?? receiver.eaAssignment?.positionAssignId ?? null,
+      assignmentId: receiver.eaAssignment?.positionAssignId ?? null,
+      legacyAssignmentId: receiver.assignment ?? null,
       assignmentName: receiver.eaAssignment?.shortName || receiver.assignmentName || null,
       routeType: receiver.eaAssignment?.routeType || receiver.assignmentRouteType || null,
       routeFamily: translated.routeFamily,
