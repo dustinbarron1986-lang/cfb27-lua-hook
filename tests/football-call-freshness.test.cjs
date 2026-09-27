@@ -16,6 +16,7 @@ const {
   updateSideFreshness,
   updateFreshness,
   logFreshnessTransitions,
+  rearmAfterAdministrativeReset,
 } = require('../src/coordinator/live-coordinator.cjs');
 
 function makeIo() {
@@ -344,4 +345,62 @@ test('freshness-change diagnostic logs fire only on the false->true transition, 
   ({ fresh, cleared } = updateFreshness(nextState, quarantine, fresh, cleared));
   logFreshnessTransitions(previousFresh, fresh, nextState, io);
   assert.equal(logs.filter(l => l.includes('call fresh:')).length, 2);
+});
+
+
+test('CPU offensive penalty reset re-arms defensive recommendation freshness even if the exposed call signature is unchanged', () => {
+  const { engine, playbooks, coordinatorWindow, io } = setup();
+  const penalizedState = {
+    possession: 1, quarter: 1, down: 1, distance: 20, yardLine: 39,
+    fieldX: -11, lineToGain: 9, gameClockSeconds: 116, playClockSeconds: 25,
+    offensiveCallAvailable: true, offensiveCallStatus: 'ok', offensiveSide: 1,
+    offensiveSet: 'Strong Trips Over', offensivePlay: 'Inside Zone Split', offensivePlayId: 501,
+    defensiveCallAvailable: true, defensiveCallStatus: 'ok', defensiveSide: 0,
+    defensiveSet: '3 High', defensivePlay: '3 Double Buzz', defensivePlayId: 601,
+  };
+
+  let quarantine = {
+    offense: { available: true, set: 'Strong Trips Over', name: 'Inside Zone Split', id: '501' },
+    defense: { available: true, set: '3 High', name: '3 Double Buzz', id: '601' },
+  };
+  quarantine = rearmAfterAdministrativeReset(
+    { type: 'administrative_reset' },
+    penalizedState,
+    quarantine,
+    io
+  );
+
+  const { fresh } = updateFreshness(
+    penalizedState,
+    quarantine,
+    { offense: false, defense: false },
+    { offense: false, defense: false }
+  );
+  assert.equal(fresh.offense, true, 'penalty boundary itself proves the old CPU call generation is invalid');
+
+  const key = printDefensiveRecommendation(
+    engine,
+    playbooks,
+    penalizedState,
+    null,
+    fresh,
+    io,
+    coordinatorWindow
+  );
+  assert.ok(key, 'DC should produce a recommendation after the penalty reset');
+  assert.equal(coordinatorWindow.state.phase, 'defensive_huddle');
+});
+
+test('administrative reset re-arm is scoped to user-defense possession only', () => {
+  const quarantine = {
+    offense: { available: true, set: 'I Form Pro', name: 'HB Duo', id: '101' },
+    defense: { available: true, set: '3-4', name: 'Cover 3 Sky', id: '1' },
+  };
+  const unchanged = rearmAfterAdministrativeReset(
+    { type: 'administrative_reset' },
+    baseState({ possession: 0 }),
+    quarantine,
+    { log: () => {} }
+  );
+  assert.deepEqual(unchanged, quarantine);
 });
