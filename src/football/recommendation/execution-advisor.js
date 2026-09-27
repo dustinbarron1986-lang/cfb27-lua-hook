@@ -21,6 +21,19 @@ try {
   buildNoviceGuide = null;
 }
 
+let buildPassingPlayArt = null;
+let deriveStructuralProgression = null;
+let analyzeRunAssignments = null;
+try {
+  ({ buildPassingPlayArt } = require("../analysis/play-art-engine"));
+  ({ deriveStructuralProgression } = require("../analysis/passing-progression-engine"));
+  ({ analyzeRunAssignments } = require("../analysis/run-gap-engine"));
+} catch (_) {
+  buildPassingPlayArt = null;
+  deriveStructuralProgression = null;
+  analyzeRunAssignments = null;
+}
+
 function safeCreatePlayKnowledgeStore(options) {
   if (!PlayKnowledgeStore) return null;
   try {
@@ -77,6 +90,33 @@ class ExecutionAdvisor {
     }
   }
 
+  _deriveAssignmentKnowledge(selectedPlay, advice, playKnowledge) {
+    if (!playKnowledge) return null;
+    const enriched = { ...playKnowledge };
+
+    if (selectedPlay?.type === 'RUN') {
+      if (analyzeRunAssignments) {
+        // Exact all-11 run assignments are not yet joined to a play. Preserve
+        // the catalog run-hole as a fallback, and only promote EA blocking
+        // semantics later when those player assignments are available.
+        enriched.runGap = analyzeRunAssignments([], { runHole: selectedPlay.runHole });
+      }
+      return enriched;
+    }
+
+    if (!buildPassingPlayArt || !deriveStructuralProgression) return enriched;
+    const art = buildPassingPlayArt(enriched.receiverButtons || []);
+    enriched.assignmentPlayArt = art;
+    if (art.exactAssignmentCount >= 2) {
+      enriched.derivedProgression = deriveStructuralProgression({
+        playArt: art,
+        coverage: advice?.coverage || null,
+        pressure: Boolean(advice?.pressureDetected),
+      });
+    }
+    return enriched;
+  }
+
   advise({ selectedPlay, defensiveCall }) {
     if (!selectedPlay) return { available: false, reason: "selected play is required" };
     if (!defensiveCall?.name) return { available: false, reason: "defensive call not known yet" };
@@ -88,7 +128,8 @@ class ExecutionAdvisor {
       defensivePlayName: defensiveCall.name
     });
 
-    const playKnowledge = this._resolvePlayKnowledge(selectedPlay);
+    const basePlayKnowledge = this._resolvePlayKnowledge(selectedPlay);
+    const playKnowledge = this._deriveAssignmentKnowledge(selectedPlay, advice, basePlayKnowledge);
     const guide = buildNoviceGuide
       ? buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge })
       : null;
