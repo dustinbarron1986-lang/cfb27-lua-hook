@@ -96,9 +96,9 @@ class ExecutionAdvisor {
 
     if (selectedPlay?.type === 'RUN') {
       if (analyzeRunAssignments) {
-        // Exact all-11 run assignments are not yet joined to a play. Preserve
-        // the catalog run-hole as a fallback, and only promote EA blocking
-        // semantics later when those player assignments are available.
+        // The authoritative all-11 assignment model is compiled offline.
+        // Live recommendation wiring is intentionally deferred in this phase,
+        // so this legacy path still exposes only the catalog run-hole fallback.
         enriched.runGap = analyzeRunAssignments([], { runHole: selectedPlay.runHole });
       }
       return enriched;
