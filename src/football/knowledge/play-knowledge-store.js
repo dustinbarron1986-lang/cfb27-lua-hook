@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { EaAssignmentStore } = require('../assignments/ea-assignment-store');
 
 const DEFAULT_AUTO_PATH = path.join(__dirname, '../../../data/knowledge/pro-style-play-knowledge.json');
 const DEFAULT_OVERRIDE_PATH = path.join(__dirname, '../../../data/knowledge/play-overrides.json');
@@ -29,12 +30,35 @@ function formationMatches(expected, actual) {
   return a === b || a.endsWith(` ${b}`) || b.endsWith(` ${a}`);
 }
 
+function enrichReceiver(receiver, eaAssignments) {
+  const copy = { ...receiver };
+  if (!eaAssignments || receiver?.assignment == null) return copy;
+  const resolved = eaAssignments.resolve(receiver.assignment);
+  if (!resolved) return copy;
+  if (resolved.ambiguous || !resolved.record) {
+    return {
+      ...copy,
+      eaAssignmentStatus: 'ambiguous',
+      eaAssignmentCandidateCount: resolved.candidates?.length || 0,
+    };
+  }
+  return {
+    ...copy,
+    eaAssignmentStatus: 'resolved',
+    eaAssignment: resolved.record,
+    eaAssignmentEquivalentDuplicates: resolved.equivalentDuplicates || 0,
+  };
+}
+
 class PlayKnowledgeStore {
   constructor(options = {}) {
     this.autoPath = options.autoPath || DEFAULT_AUTO_PATH;
     this.overridePath = options.overridePath || DEFAULT_OVERRIDE_PATH;
     this.auto = options.autoData || readJson(this.autoPath, { playbooks: {} });
     this.overrides = options.overrideData || readJson(this.overridePath, { plays: {} });
+    this.eaAssignments = options.eaAssignmentStore !== undefined
+      ? options.eaAssignmentStore
+      : new EaAssignmentStore(options.eaAssignmentOptions || {});
   }
 
   resolve(playbookId, formation, playName) {
@@ -63,13 +87,18 @@ class PlayKnowledgeStore {
     }
 
     if (!auto && !override) return null;
+    const receiverButtons = (override?.receiverButtons || auto?.receiverButtons || [])
+      .map(receiver => enrichReceiver(receiver, this.eaAssignments));
+
     return {
       ...(auto || {}),
       ...(override || {}),
       source: override ? 'manual_override' : 'generated_audit',
       routeArtVerified: Boolean(override?.routeArtVerified),
       progressionVerified: Boolean(override?.progressionVerified),
-      receiverButtons: override?.receiverButtons || auto?.receiverButtons || [],
+      receiverButtons,
+      eaAssignmentLibraryAvailable: Boolean(this.eaAssignments?.available?.()),
+      eaAssignmentResolvedCount: receiverButtons.filter(receiver => receiver.eaAssignmentStatus === 'resolved').length,
       buttonMappingConfidence: override?.buttonMappingConfidence || auto?.buttonMappingConfidence || 'unknown'
     };
   }
@@ -85,7 +114,8 @@ class PlayKnowledgeStore {
       missingCatalogCandidate: 0,
       buttonMapHigh: 0,
       partialRouteKnowledge: 0,
-      progressionVerified: 0
+      progressionVerified: 0,
+      eaAssignmentResolvedReceivers: 0
     };
     const issues = [];
 
@@ -98,6 +128,7 @@ class PlayKnowledgeStore {
       if (resolved.buttonMappingConfidence === 'high') counts.buttonMapHigh += 1;
       if (resolved.routeKnowledge === 'partial') counts.partialRouteKnowledge += 1;
       if (resolved.progressionVerified) counts.progressionVerified += 1;
+      counts.eaAssignmentResolvedReceivers += Number(resolved.eaAssignmentResolvedCount || 0);
 
       if (!resolved.routeArtVerified || !resolved.progressionVerified) {
         issues.push({
@@ -107,6 +138,7 @@ class PlayKnowledgeStore {
           buttonMappingConfidence: resolved.buttonMappingConfidence || 'unknown',
           routeArtVerified: Boolean(resolved.routeArtVerified),
           progressionVerified: Boolean(resolved.progressionVerified),
+          eaAssignmentResolvedCount: Number(resolved.eaAssignmentResolvedCount || 0),
           candidateCount: entry.candidateCount || 0
         });
       }
@@ -116,4 +148,9 @@ class PlayKnowledgeStore {
   }
 }
 
-module.exports = { PlayKnowledgeStore, normalizePlayKnowledgeName: normalize, playKnowledgeKey: keyFor };
+module.exports = {
+  PlayKnowledgeStore,
+  normalizePlayKnowledgeName: normalize,
+  playKnowledgeKey: keyFor,
+  enrichReceiver,
+};
