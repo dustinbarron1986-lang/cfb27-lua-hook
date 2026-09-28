@@ -186,3 +186,36 @@ test('offensive structure remains multi-label for an RPO', () => {
   assert.ok(structure.threatKeys.includes('quick_horizontal'));
   assert.ok(structure.modifierKeys.includes('RPO_CONFLICT'));
 });
+
+
+test('OC Stage 1 uses recent defensive structure before an exact defense is known', () => {
+  const rows = [
+    event({ offense: 'HB Slam', offenseId: 'o1', defense: 'Cover 3 Sky', defenseId: 'd1', possession: 0 }),
+    event({ offense: 'HB Slam', offenseId: 'o2', defense: 'Cover 3 Sky', defenseId: 'd2', possession: 0 }),
+    event({ offense: 'HB Slam', offenseId: 'o3', defense: 'Cover 3 Sky', defenseId: 'd3', possession: 0 }),
+  ];
+  const store = new PerformanceStore(rows);
+  const knowledge = knowledgeStub();
+  const tendencies = new OpponentTendencies(store, { knowledge });
+  const engine = new PlaySelectionEngine({
+    store,
+    sequences: { setupStrength: () => ({ rawScore: 0 }) },
+    tendencies,
+    knowledge,
+    recommendationHistory: new RecommendationHistory(),
+  });
+
+  const ranked = engine.rank({
+    playbook: { plays: [
+      { id: 'run', name: 'Inside Zone', type: 'RUN', concepts: ['inside_zone'] },
+      { id: 'flood', name: 'PA Flood', type: 'PASS', concepts: ['flood'], modifiers: ['play_action'] },
+    ] },
+    defensePlay: null,
+    situation: { down: 2, distance: 7 },
+    limit: 2,
+  });
+
+  assert.equal(ranked.informationMode, 'historical_defense_structure');
+  assert.equal(ranked.recommendations[0].play.id, 'flood');
+  assert.ok(ranked.recommendations[0].components.historicalStructureFit > 0);
+});
