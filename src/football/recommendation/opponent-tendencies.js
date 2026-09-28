@@ -1,3 +1,5 @@
+const { classifyOffensiveStructure, classifyDefensiveStructure } = require('../analysis/structural-threat-model');
+
 function confidenceFromSample(n) {
   if (n >= 20) return "HIGH";
   if (n >= 10) return "MEDIUM";
@@ -33,9 +35,48 @@ function classifyDefense(event) {
   return { blitz, man, zone, name: event.opponentPlay?.name || null };
 }
 
+function weightedProfile(rows, currentSignals, getSignals) {
+  const scores = new Map();
+  const evidence = [];
+  const add = (key, weight, source) => {
+    if (!key) return;
+    scores.set(key, (scores.get(key) || 0) + weight);
+    evidence.push({ key, weight, source });
+  };
+
+  const recent = rows.slice(-10);
+  recent.forEach((row, index) => {
+    const age = recent.length - 1 - index;
+    const recency = 1.5 * Math.pow(0.72, age);
+    for (const signal of getSignals(row)) add(signal.key || signal, recency * (Number(signal.weight) || 1), `history:${age}`);
+  });
+
+  const older = rows.slice(0, Math.max(0, rows.length - 10));
+  for (const row of older) {
+    for (const signal of getSignals(row)) add(signal.key || signal, 0.08 * (Number(signal.weight) || 1), 'background');
+  }
+
+  for (const signal of currentSignals || []) add(signal.key || signal, 3.0 * (Number(signal.weight) || 1), 'current');
+
+  const total = [...scores.values()].reduce((sum, value) => sum + value, 0);
+  const ordered = [...scores.entries()]
+    .map(([key, score]) => ({ key, score, share: total ? score / total : 0 }))
+    .sort((a, b) => b.score - a.score);
+
+  return {
+    sampleSize: rows.length,
+    totalWeight: total,
+    primary: ordered[0]?.key || null,
+    signals: ordered,
+    scores: Object.fromEntries(ordered.map(row => [row.key, row.score])),
+    evidence,
+  };
+}
+
 class OpponentTendencies {
-  constructor(store) {
+  constructor(store, options = {}) {
     this.store = store;
+    this.knowledge = options.knowledge || null;
   }
 
   summarize(situation = {}, options = {}) {
@@ -45,7 +86,6 @@ class OpponentTendencies {
     const targetField = bucketField(situation.yardLine);
     const targetQuarter = Number(situation.quarter || 0);
 
-    // Progressive fallback: most specific useful sample wins.
     const filters = [
       {
         label: "down_distance_field",
@@ -103,13 +143,50 @@ class OpponentTendencies {
     };
   }
 
+  recentOffensiveThreats(currentPlay = null, options = {}) {
+    const rows = this.store.getAll().filter(event => Number(event.situation?.possession) === 1);
+    const current = classifyOffensiveStructure(currentPlay || {}, options.authoritativeStructure || currentPlay?.authoritativeStructure || null);
+    const profile = weightedProfile(
+      rows,
+      current.threats,
+      event => (event.play?.structural?.threats || classifyOffensiveStructure(event.play || {}).threats)
+    );
+    return { ...profile, current, mode: 'opponent_offense' };
+  }
+
+  recentDefensiveStructures(currentPlay = null) {
+    const rows = this.store.getAll().filter(event => Number(event.situation?.possession) === 0);
+    const current = classifyDefensiveStructure(currentPlay || {}, this.knowledge);
+    const currentSignals = [
+      ...(current.coverageFamily ? [{ key: current.coverageFamily, weight: 1.2 }] : []),
+      ...(current.pressure ? [{ key: 'pressure', weight: 1.0 }] : []),
+      ...(current.man ? [{ key: 'man', weight: 0.8 }] : []),
+      ...(current.zone ? [{ key: 'zone', weight: 0.8 }] : []),
+      ...current.weaknesses.map(key => ({ key, weight: 0.7 })),
+    ];
+    const profile = weightedProfile(
+      rows,
+      currentSignals,
+      event => {
+        const structural = event.opponentPlay?.structural || classifyDefensiveStructure(event.opponentPlay || {}, this.knowledge);
+        return [
+          ...(structural.coverageFamily ? [{ key: structural.coverageFamily, weight: 1.2 }] : []),
+          ...(structural.pressure ? [{ key: 'pressure', weight: 1.0 }] : []),
+          ...(structural.man ? [{ key: 'man', weight: 0.8 }] : []),
+          ...(structural.zone ? [{ key: 'zone', weight: 0.8 }] : []),
+          ...(structural.weaknesses || []).map(key => ({ key, weight: 0.7 })),
+        ];
+      }
+    );
+    return { ...profile, current, mode: 'opponent_defense' };
+  }
+
   scoreCandidate(play, tendency) {
     if (!tendency || !tendency.attempts) return { score: 0, reasons: [] };
     const concepts = new Set((play.concepts || []).map(x => String(x).toLowerCase()));
     const reasons = [];
     let score = 0;
 
-    // IMPORTANT: these are historical tendencies only, never the current exact defensive call.
     if (tendency.manRate >= 0.60) {
       if (concepts.has("man_beater") || concepts.has("mesh") || concepts.has("crossers")) {
         score += 1.1; reasons.push(`historical tendency leans man (${Math.round(tendency.manRate * 100)}%)`);
@@ -129,7 +206,6 @@ class OpponentTendencies {
       }
     }
 
-    // Scale tendency impact down when sample is tiny.
     const multiplier =
       tendency.confidence === "HIGH" ? 1 :
       tendency.confidence === "MEDIUM" ? 0.85 :
@@ -139,4 +215,10 @@ class OpponentTendencies {
   }
 }
 
-module.exports = { OpponentTendencies, bucketDistance, bucketField, classifyDefense };
+module.exports = {
+  OpponentTendencies,
+  bucketDistance,
+  bucketField,
+  classifyDefense,
+  weightedProfile,
+};
