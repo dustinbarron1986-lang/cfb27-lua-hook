@@ -26,6 +26,13 @@ try {
   advisePreSnapAudible = null;
 }
 
+let advisePreSnapCoordinator = null;
+try {
+  ({ advisePreSnapCoordinator } = require("./pre-snap-coordinator"));
+} catch (_) {
+  advisePreSnapCoordinator = null;
+}
+
 let buildPassingPlayArt = null;
 let deriveStructuralProgression = null;
 let analyzeRunAssignments = null;
@@ -207,7 +214,7 @@ class ExecutionAdvisor {
     return enriched;
   }
 
-  advise({ selectedPlay, defensiveCall }) {
+  advise({ selectedPlay, defensiveCall, audiblePackage = null, playbook = null, situation = null, performanceStore = null }) {
     if (!selectedPlay) return { available: false, reason: "selected play is required" };
     if (!defensiveCall?.name) return { available: false, reason: "defensive call not known yet" };
 
@@ -237,12 +244,24 @@ class ExecutionAdvisor {
           defensiveCall,
         })
       : null;
+    const preSnap = advisePreSnapCoordinator
+      ? advisePreSnapCoordinator({
+          selectedPlay,
+          defensiveCall,
+          playbook,
+          situation,
+          audiblePackage,
+          authoritativeKnowledge: authoritative,
+          knowledge: this.knowledge,
+          performanceStore,
+        })
+      : null;
 
     const authoritativeUseful = Boolean(
       authoritative?.structuralRun?.available ||
       authoritative?.derivedProgression?.available
     );
-    const available = Boolean(advice?.known || authoritativeUseful);
+    const available = Boolean(advice?.known || authoritativeUseful || preSnap?.available);
 
     return {
       available,
@@ -258,6 +277,7 @@ class ExecutionAdvisor {
       advice,
       guide,
       audible,
+      preSnap,
       authority: authoritative?.authoritative || null,
     };
   }

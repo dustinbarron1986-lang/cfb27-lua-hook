@@ -8,6 +8,7 @@ const { ExecutionAdvisor } = require("./recommendation/execution-advisor");
 const { DefensiveSelectionEngine } = require("./recommendation/defensive-selection-engine");
 const { KnowledgeEngine } = require("./knowledge/knowledge-engine");
 const { classifyOffensiveStructure, classifyDefensiveStructure } = require("./analysis/structural-threat-model");
+const { AudiblePackageStore } = require("./recommendation/audible-package-store");
 
 let DatabasePlaybookRepository = null;
 try {
@@ -25,6 +26,9 @@ class FootballEngine {
         : null);
 
     this.performance = new PerformanceStore();
+    this.audiblePackages = options.audiblePackageStore || new AudiblePackageStore({
+      filePath: options.audiblePackagePath || null,
+    });
     this.sequences = new SequenceMemory(this.performance);
     this.knowledge = options.knowledge || new KnowledgeEngine(options.knowledgeOptions || {});
     this.recommendationHistory = options.recommendationHistory || new RecommendationHistory();
@@ -163,9 +167,37 @@ class FootballEngine {
     });
   }
 
-  adviseExecution({ selectedPlay, defensiveCall }) {
+  prepareAudiblePackages(playbook) {
+    return this.audiblePackages.ensureForPlaybook(playbook);
+  }
+
+  getAudiblePackage(playbook, formation) {
+    if (!playbook || !formation) return null;
+    return this.audiblePackages.ensurePackage(playbook, formation);
+  }
+
+  reviewAudiblePackages(playbook, options = {}) {
+    return this.audiblePackages.review({
+      playbook,
+      performanceStore: this.performance,
+      ...options,
+    });
+  }
+
+  adviseExecution({ selectedPlay, defensiveCall, playbook = null, situation = null }) {
     // Deliberately post-selection: this is where exact live defense becomes relevant.
-    return this.executionAdvisor.advise({ selectedPlay, defensiveCall });
+    const normalizedDefense = defensiveCall ? this._withObservedFamily(defensiveCall, "defense") : defensiveCall;
+    const audiblePackage = playbook && selectedPlay?.formation
+      ? this.audiblePackages.ensurePackage(playbook, selectedPlay.formation)
+      : null;
+    return this.executionAdvisor.advise({
+      selectedPlay,
+      defensiveCall: normalizedDefense,
+      audiblePackage,
+      playbook,
+      situation,
+      performanceStore: this.performance,
+    });
   }
 }
 

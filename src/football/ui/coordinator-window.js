@@ -419,6 +419,16 @@ function renderAudibleRecommendation(audible) {
     esc((box.classification || 'NEUTRAL') + ' box / ' + (box.confidence || 'LOW') + ' confidence') +
     '<div class="guideText">' + esc(reason) + '</div></div>';
 }
+function renderPreSnapRecommendation(preSnap) {
+  if (!preSnap?.available) return '';
+  const action = preSnap.action || {};
+  const reasons = preSnap.reasons || [];
+  const why = reasons.length ? '<div class="guideText"><b>WHY:</b> ' + esc(reasons[0]) + '</div>' : '';
+  const best = preSnap.bestBet
+    ? '<div class="guideText" style="margin-top:6px"><b>BEST BET:</b> ' + esc(preSnap.bestBet.player) + ' — ' + esc(preSnap.bestBet.route) + '<br>' + esc(preSnap.bestBet.reason) + '</div>'
+    : '';
+  return '<div class="plainCallout"><b>ACTION: ' + esc(action.label || preSnap.decision || 'KEEP PLAY') + '</b>' + why + best + '</div>';
+}
 function routePath(kind) {
   const p = {
     crossLeftToRight: 'M55 145 C105 120 165 100 255 92',
@@ -634,7 +644,8 @@ function render(s) {
     els.detail.className = 'read';
     const guideHtml = renderGuide(s.guide) ||
       detail('READ', Array.isArray(s.read) && s.read.length ? s.read : (s.read || 'No specific adjustment.'));
-    els.detail.innerHTML = detail('WHY', s.coordinatorWhy) + guideHtml + renderAudibleRecommendation(s.audibleRecommendation);
+    els.detail.innerHTML = detail('WHY', s.coordinatorWhy) + renderPreSnapRecommendation(s.preSnapRecommendation) + guideHtml +
+      (s.preSnapRecommendation ? '' : renderAudibleRecommendation(s.audibleRecommendation));
   } else if (s.phase === 'defensive_huddle') {
     els.eyebrow.textContent = 'DEFENSIVE CALL';
     els.play.textContent = s.call || 'NO CALL AVAILABLE';
@@ -831,6 +842,7 @@ class CoordinatorWindow {
       read: null,
       guide: null,
       audibleRecommendation: null,
+      preSnapRecommendation: null,
       result: null,
       error: null,
       updatedAt: new Date().toISOString()
@@ -897,6 +909,7 @@ class CoordinatorWindow {
         read: null,
         guide: null,
         audibleRecommendation: null,
+        preSnapRecommendation: null,
         result: null
       });
     }
@@ -972,6 +985,7 @@ class CoordinatorWindow {
         read: null,
         guide: null,
         audibleRecommendation: null,
+        preSnapRecommendation: null,
         result: null
       });
     }
@@ -1030,6 +1044,7 @@ class CoordinatorWindow {
       read: notes,
       guide: advice?.guide || null,
       audibleRecommendation: advice?.audible || null,
+      preSnapRecommendation: advice?.preSnap || null,
       result: null
     });
   }
@@ -1055,6 +1070,8 @@ class CoordinatorWindow {
       cpuFormation: null,
       read: null,
       guide: null,
+      audibleRecommendation: null,
+      preSnapRecommendation: null,
       result: [yards, ...flags].join(' • ')
     });
   }

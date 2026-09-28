@@ -431,6 +431,8 @@ function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coor
   const result = engine.adviseExecution({
     selectedPlay: executionPlay,
     defensiveCall: { id: defenseCall.id, set: defenseCall.set, name: defenseCall.name },
+    playbook: playbooks.offense,
+    situation: situationFromState(state),
   });
 
   coordinatorWindow.showSelection({
@@ -444,7 +446,12 @@ function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coor
   }, result, state);
 
   io.log(`\n[READ] ${offenseCall.set || '?'} / ${offenseCall.name} vs ${defenseCall.set || '?'} / ${defenseCall.name}`);
-  if (result.audible) {
+  if (result.preSnap?.available) {
+    const pre = result.preSnap;
+    io.log(`[PRESNAP] ACTION: ${pre.action?.label || pre.decision || 'KEEP PLAY'}`);
+    if (pre.reasons?.[0]) io.log(`[PRESNAP] WHY: ${pre.reasons[0]}`);
+    if (pre.bestBet) io.log(`[PRESNAP] BEST BET: ${pre.bestBet.player} — ${pre.bestBet.route} | ${pre.bestBet.reason}`);
+  } else if (result.audible) {
     const audible = result.audible;
     io.log(`[AUDIBLE] offense=${audible.offense?.family || 'AMBIGUOUS'}(${audible.offense?.confidence || 'LOW'}) | box=${audible.box?.classification || 'NEUTRAL'}(${audible.box?.confidence || 'LOW'}) | decision=${audible.decision || 'KEEP'} | provenance=${audible.box?.provenance || 'HEURISTIC'}`);
     if (audible.reason) io.log(`[AUDIBLE] ${audible.reason}`);
@@ -710,6 +717,7 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
     // simply becomes authoritative for every subsequent tick that reads
     // playbooks.offense/playbooks.defense.
     playbooks[side] = newBook;
+    if (side === 'offense') engine.prepareAudiblePackages?.(newBook);
     io.log(playbookLogLine(side === 'offense' ? 'Offense' : 'Defense', newBook));
 
     let appliedImmediately = false;
@@ -755,7 +763,9 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   });
   const engine = new FootballEngine({
     executionAdvisor: { eaPlayKnowledgeStore: authoritativePlayStore },
+    audiblePackagePath: path.resolve(root, 'data/coordinator-audibles.json'),
   });
+  const audiblePreparation = engine.prepareAudiblePackages(playbooks.offense);
   const reducer = new SnapReducer();
   let lastSituationKey = null;
   let lastExecutionKey = null;
@@ -807,6 +817,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
     io.log(`[COORD] Connected to CollegeFB27 pid=${game.pid}`);
     io.log(playbookLogLine('Offense', playbooks.offense));
     io.log(playbookLogLine('Defense', playbooks.defense));
+    io.log(`[AUDIBLES] prepared=${audiblePreparation.packages.length} formation packages${audiblePreparation.gaps.length ? ` gaps=${audiblePreparation.gaps.length}` : ''}`);
     io.log('[COORD] Waiting for live coord.state telemetry...');
 
     for await (const event of sdk.followEvents(client, { after, pollMs: config.pollMs || 250, signal })) {
@@ -921,6 +932,11 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
       }
     }
   } finally {
+    const audibleReview = engine.reviewAudiblePackages?.(playbooks.offense) || [];
+    for (const row of audibleReview) {
+      const replacement = row.proposedReplacement ? ` -> ${row.proposedReplacement.playName}` : '';
+      io.log(`[AUDIBLE REVIEW] ${row.status} | ${row.formation} | ${row.audibleSlot} ${row.currentAudible}${replacement} | ${row.reason}`);
+    }
     await coordinatorWindow.close();
     if (playbookDatabase) {
       try { playbookDatabase.close(); } catch (_) { /* already closed or never opened */ }

@@ -347,3 +347,25 @@ test('showOracleRecommendation adds exact-defense decision without replacing the
   assert.equal(coordinatorWindow.state.oracleDecision, 'KEEP');
   assert.equal(coordinatorWindow.state.oracleCall, null);
 });
+
+
+test('render() shows the unified pre-snap action and Best Bet on the existing execution surface', () => {
+  const { context, elements } = loadClientScript();
+  context.render({
+    phase: 'selected',
+    coordinatorCall: 'Four Verticals',
+    coordinatorFormation: 'Gun Ace',
+    preSnapRecommendation: {
+      available: true,
+      decision: 'PROTECTION',
+      action: { label: 'KEEP PLAY — HB PASS PRO' },
+      reasons: ['Pressure is identified and the HB can stay in.'],
+      bestBet: { player: 'X', route: 'Slant', reason: 'Structural pressure answer.' },
+    },
+    guide: null,
+  });
+  const html = elements.get('detail').innerHTML;
+  assert.match(html, /ACTION: KEEP PLAY — HB PASS PRO/);
+  assert.match(html, /BEST BET:/);
+  assert.match(html, /X — Slant/);
+});
