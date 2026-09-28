@@ -1,5 +1,3 @@
-const path = require("path");
-
 let KnowledgeEngine = null;
 try {
   ({ KnowledgeEngine } = require("../knowledge/knowledge-engine"));
@@ -24,14 +22,31 @@ try {
 let buildPassingPlayArt = null;
 let deriveStructuralProgression = null;
 let analyzeRunAssignments = null;
+let buildAuthoritativePlayStructure = null;
+let deriveRunExecution = null;
+let deriveScreenExecution = null;
+let deriveRpoExecution = null;
+let authoritativeReceiverRows = null;
 try {
   ({ buildPassingPlayArt } = require("../analysis/play-art-engine"));
   ({ deriveStructuralProgression } = require("../analysis/passing-progression-engine"));
   ({ analyzeRunAssignments } = require("../analysis/run-gap-engine"));
+  ({
+    buildAuthoritativePlayStructure,
+    deriveRunExecution,
+    deriveScreenExecution,
+    deriveRpoExecution,
+    authoritativeReceiverRows,
+  } = require("../analysis/authoritative-play-structure"));
 } catch (_) {
   buildPassingPlayArt = null;
   deriveStructuralProgression = null;
   analyzeRunAssignments = null;
+  buildAuthoritativePlayStructure = null;
+  deriveRunExecution = null;
+  deriveScreenExecution = null;
+  deriveRpoExecution = null;
+  authoritativeReceiverRows = null;
 }
 
 function safeCreatePlayKnowledgeStore(options) {
@@ -44,9 +59,6 @@ function safeCreatePlayKnowledgeStore(options) {
 }
 
 function detectConcept(play = {}) {
-  // The catalog's primaryConcept is exact, verified data for this specific play
-  // (e.g. "Shock H Option" -> "choice_option") and must win over any whitelist
-  // guess derived from the play's broader concepts[] tag list.
   if (play.primaryConcept && String(play.primaryConcept).trim()) {
     return String(play.primaryConcept).trim();
   }
@@ -65,6 +77,18 @@ function detectConcept(play = {}) {
   return play.name || concepts[0] || null;
 }
 
+function unknownAdvice(concept) {
+  return {
+    known: false,
+    concept: concept || null,
+    headline: null,
+    reasons: [],
+    coaching: { preSnap: [], postSnap: [] },
+    coverage: null,
+    pressureDetected: false,
+  };
+}
+
 class ExecutionAdvisor {
   constructor(options = {}) {
     this.knowledge = options.knowledgeEngine ||
@@ -72,14 +96,9 @@ class ExecutionAdvisor {
     this.playKnowledge = options.playKnowledgeStore !== undefined
       ? options.playKnowledgeStore
       : safeCreatePlayKnowledgeStore(options.playKnowledgeOptions);
+    this.eaPlayKnowledge = options.eaPlayKnowledgeStore || null;
   }
 
-  // Conservative: only look up play-specific knowledge when the selected play
-  // carries a known source playbook id (set by the DB-backed playbook
-  // repository) plus a formation and name to key on. A sample-JSON play, an
-  // unsupported/unverified playbook, or an unrecognized name all simply
-  // resolve to null here -- buildNoviceGuide then falls back to concept-level
-  // (estimated) guidance rather than guessing at exact knowledge.
   _resolvePlayKnowledge(selectedPlay) {
     if (!this.playKnowledge) return null;
     if (selectedPlay?.sourcePlaybookId == null || !selectedPlay?.formation || !selectedPlay?.name) return null;
@@ -90,15 +109,79 @@ class ExecutionAdvisor {
     }
   }
 
-  _deriveAssignmentKnowledge(selectedPlay, advice, playKnowledge) {
+  _resolveAuthoritativePlayKnowledge(selectedPlay, advice) {
+    const playKey = selectedPlay?.eaAuthority?.playKey;
+    if (!playKey || !this.eaPlayKnowledge || !buildAuthoritativePlayStructure) return null;
+
+    let expanded;
+    try {
+      expanded = this.eaPlayKnowledge.expandPlay(playKey);
+    } catch (_) {
+      return null;
+    }
+    const structure = buildAuthoritativePlayStructure(expanded);
+    if (!structure?.available) return null;
+
+    const receiverButtons = authoritativeReceiverRows ? authoritativeReceiverRows(structure) : [];
+    const enriched = {
+      authoritative: structure,
+      source: 'ea_authoritative_play',
+      receiverButtons,
+      assignmentPlayArt: structure.playArt,
+      progressionVerified: false,
+      routeArtVerified: false,
+      routeKnowledge: structure.playArt?.exactAssignmentCount ? 'ea_assignment_geometry' : 'unknown',
+    };
+
+    const kind = structure.classification?.kind;
+    if (kind === 'run') {
+      if (analyzeRunAssignments) {
+        const assignments = structure.players.map(player => ({
+          player: player.label,
+          position: player.label,
+          eaAssignment: player.eaAssignment,
+        }));
+        enriched.runGap = analyzeRunAssignments(assignments, { runHole: structure.play?.runHole });
+      }
+      if (deriveRunExecution) enriched.structuralRun = deriveRunExecution(structure, enriched.runGap);
+      return enriched;
+    }
+
+    if (kind === 'screen') {
+      if (deriveScreenExecution) enriched.derivedProgression = deriveScreenExecution(structure);
+      return enriched;
+    }
+
+    if (kind === 'rpo') {
+      if (deriveRpoExecution) enriched.derivedProgression = deriveRpoExecution(structure);
+      return enriched;
+    }
+
+    if (deriveStructuralProgression && structure.playArt?.exactAssignmentCount >= 2) {
+      enriched.derivedProgression = deriveStructuralProgression({
+        playArt: structure.playArt,
+        coverage: advice?.coverage || null,
+        pressure: Boolean(advice?.pressureDetected),
+      });
+      if (structure.classification?.playAction) {
+        enriched.derivedProgression = {
+          ...enriched.derivedProgression,
+          playAction: true,
+          playActionEvidence: structure.classification.qbActions.includes('ID_HANDOFF_FAKE')
+            ? 'ID_HANDOFF_FAKE'
+            : structure.play?.offensePlayType || null,
+        };
+      }
+    }
+    return enriched;
+  }
+
+  _deriveLegacyAssignmentKnowledge(selectedPlay, advice, playKnowledge) {
     if (!playKnowledge) return null;
     const enriched = { ...playKnowledge };
 
     if (selectedPlay?.type === 'RUN') {
       if (analyzeRunAssignments) {
-        // The authoritative all-11 assignment model is compiled offline.
-        // Live recommendation wiring is intentionally deferred in this phase,
-        // so this legacy path still exposes only the catalog run-hole fallback.
         enriched.runGap = analyzeRunAssignments([], { runHole: selectedPlay.runHole });
       }
       return enriched;
@@ -120,22 +203,36 @@ class ExecutionAdvisor {
   advise({ selectedPlay, defensiveCall }) {
     if (!selectedPlay) return { available: false, reason: "selected play is required" };
     if (!defensiveCall?.name) return { available: false, reason: "defensive call not known yet" };
-    if (!this.knowledge) return { available: false, reason: "football knowledge engine is not installed" };
 
     const concept = detectConcept(selectedPlay);
-    const advice = this.knowledge.advise({
-      concept,
-      defensivePlayName: defensiveCall.name
-    });
+    let advice = unknownAdvice(concept);
+    if (this.knowledge) {
+      try {
+        advice = this.knowledge.advise({
+          concept,
+          defensivePlayName: defensiveCall.name
+        }) || advice;
+      } catch (_) {
+        advice = unknownAdvice(concept);
+      }
+    }
 
-    const basePlayKnowledge = this._resolvePlayKnowledge(selectedPlay);
-    const playKnowledge = this._deriveAssignmentKnowledge(selectedPlay, advice, basePlayKnowledge);
+    const authoritative = this._resolveAuthoritativePlayKnowledge(selectedPlay, advice);
+    const legacy = authoritative ? null : this._resolvePlayKnowledge(selectedPlay);
+    const playKnowledge = authoritative || this._deriveLegacyAssignmentKnowledge(selectedPlay, advice, legacy);
     const guide = buildNoviceGuide
       ? buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge })
       : null;
 
+    const authoritativeUseful = Boolean(
+      authoritative?.structuralRun?.available ||
+      authoritative?.derivedProgression?.available
+    );
+    const available = Boolean(advice?.known || authoritativeUseful);
+
     return {
-      available: Boolean(advice?.known),
+      available,
+      reason: available ? null : (this.knowledge ? 'play not mapped to concept or authoritative structural guidance' : 'football knowledge engine is not installed'),
       phase: "post_selection_execution",
       selectedPlay: {
         id: selectedPlay.id,
@@ -145,7 +242,8 @@ class ExecutionAdvisor {
       },
       defense: defensiveCall,
       advice,
-      guide
+      guide,
+      authority: authoritative?.authoritative || null,
     };
   }
 }
