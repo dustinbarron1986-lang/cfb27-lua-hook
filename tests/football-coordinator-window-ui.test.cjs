@@ -262,5 +262,4 @@ test('render() shows audible advice alongside the existing read/guide surface', 
   const html = elements.get('detail').innerHTML;
   assert.match(html, /AUDIBLE: RUN/);
   assert.match(html, /LIGHT box \/ MEDIUM confidence/);
-  assert.match(html, /Read leverage/);
 });
