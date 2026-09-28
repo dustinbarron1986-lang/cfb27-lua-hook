@@ -12,8 +12,12 @@ const { loadPlaybooks } = require('../src/coordinator/playbook-loader.cjs');
 const { SnapReducer } = require('../src/coordinator/snap-reducer.cjs');
 const {
   handleNewSituation,
+  printRecommendation,
+  printOracleRecommendation,
   printExecutionAdvice,
   printDefensiveRecommendation,
+  exactDefenseFromState,
+  isOffensiveScrimmageSituation,
 } = require('../src/coordinator/live-coordinator.cjs');
 
 function makeIo() {
@@ -42,6 +46,36 @@ function firstOffensiveHuddleState() {
     offensiveSet: null, offensivePlay: null, offensivePlayId: null,
     defensiveCallAvailable: false, defensiveCallStatus: null, defensiveSide: 1,
     defensiveSet: null, defensivePlay: null, defensivePlayId: null,
+  };
+}
+
+function lifecycleStubEngine({ oracle = 'KEEP' } = {}) {
+  const initial = { id: 'initial', name: 'PA Power G Drive', formation: 'I Form Pro', concepts: ['flood'] };
+  const replacement = { id: 'replacement', name: 'Quick Flood', formation: 'Gun Trips', concepts: ['flood'] };
+  const calls = [];
+  return {
+    calls,
+    initial,
+    replacement,
+    recommendPlays({ defensePlay }) {
+      calls.push({ defensePlay });
+      if (!defensePlay) {
+        return {
+          recommendations: [{ play: initial, score: 4, reasons: ['Best situation/tendency-based call'], diagnostic: { counter: { structure: { primaryThreat: 'flood' } } } }],
+          tendency: { attempts: 0 },
+        };
+      }
+      const initialRow = { play: initial, score: 5, reasons: [], diagnostic: { counter: { valid: true } } };
+      const replacementRow = { play: replacement, score: oracle === 'CHANGE' ? 6.4 : 5.3, reasons: [], diagnostic: { counter: { valid: true } } };
+      const strategicCandidates = oracle === 'CHANGE'
+        ? [replacementRow, initialRow]
+        : [initialRow, replacementRow];
+      return {
+        recommendations: strategicCandidates.slice(0, 3),
+        strategicCandidates,
+      };
+    },
+    recordRecommendation() {},
   };
 }
 
@@ -314,4 +348,165 @@ test('accepted offensive penalty is an administrative reset, not a completed sna
   assert.equal(result.state.down, 1);
   assert.equal(result.state.distance, 20);
   assert.equal(reducer.serial, 0, 'penalty reset must not increment snap serial');
+});
+
+
+test('first offensive huddle produces an OC call before any offensive play is selected', () => {
+  const engine = lifecycleStubEngine();
+  const playbooks = { offense: { plays: [engine.initial, engine.replacement] }, defense: { plays: [] } };
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const { io, logs } = makeIo();
+  const state = firstOffensiveHuddleState();
+
+  assert.equal(state.offensiveCallAvailable, false);
+  handleNewSituation(engine, playbooks, state, null, 'first-offensive-huddle', io, coordinatorWindow);
+
+  assert.ok(logs.some(line => line.includes('[OC] CALL:')));
+  assert.equal(coordinatorWindow.state.coordinatorCall, 'PA Power G Drive');
+  assert.equal(coordinatorWindow.state.userCall, null);
+  assert.equal(engine.calls[0].defensePlay, null);
+});
+
+test('fresh exact defense triggers Oracle reevaluation of the stored initial coordinator call', () => {
+  const engine = lifecycleStubEngine({ oracle: 'KEEP' });
+  const playbooks = { offense: { plays: [engine.initial, engine.replacement] }, defense: { plays: [] } };
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const { io } = makeIo();
+  const state = firstOffensiveHuddleState();
+
+  printRecommendation(engine, playbooks, state, io, coordinatorWindow);
+  const later = {
+    ...state,
+    defensiveCallAvailable: true,
+    defensiveCallStatus: 'ok',
+    defensiveSet: 'Nickel 2-4 Dbl Mug',
+    defensivePlay: 'Nickel Blitz 1',
+    defensivePlayId: 77,
+  };
+  const exact = exactDefenseFromState({
+    knowledge: {
+      catalogResolver: { describeDefensivePlay: () => ({ coverageFamily: 'cover_1', assignmentFamilies: [], concepts: [] }) },
+      resolveCoverage: () => 'cover_1',
+    }
+  }, later, { defense: true });
+
+  const oracle = printOracleRecommendation(engine, playbooks, later, exact, io, coordinatorWindow);
+
+  assert.ok(oracle);
+  assert.equal(engine.calls.length, 2);
+  assert.ok(engine.calls[1].defensePlay);
+  assert.equal(coordinatorWindow.state.cpuDefense, 'Nickel Blitz 1');
+});
+
+test('Oracle returns KEEP when exact defense does not materially improve on the initial call', () => {
+  const engine = lifecycleStubEngine({ oracle: 'KEEP' });
+  const playbooks = { offense: { plays: [engine.initial, engine.replacement] }, defense: { plays: [] } };
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const { io } = makeIo();
+  const state = firstOffensiveHuddleState();
+
+  printRecommendation(engine, playbooks, state, io, coordinatorWindow);
+  const oracle = printOracleRecommendation(
+    engine, playbooks, state,
+    { id: 'c3', name: 'Cover 3 Sky', formation: 'Nickel 3-3', coverageFamily: 'cover_3' },
+    io, coordinatorWindow
+  );
+
+  assert.equal(oracle.decision, 'KEEP');
+  assert.equal(coordinatorWindow.state.oracleDecision, 'KEEP');
+  assert.equal(coordinatorWindow.state.oracleCall, null);
+  assert.equal(coordinatorWindow.state.coordinatorCall, 'PA Power G Drive');
+});
+
+test('Oracle returns CHANGE when exact defense exposes a materially better valid counter', () => {
+  const engine = lifecycleStubEngine({ oracle: 'CHANGE' });
+  const playbooks = { offense: { plays: [engine.initial, engine.replacement] }, defense: { plays: [] } };
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const { io, logs } = makeIo();
+  const state = firstOffensiveHuddleState();
+
+  printRecommendation(engine, playbooks, state, io, coordinatorWindow);
+  const oracle = printOracleRecommendation(
+    engine, playbooks, state,
+    { id: 'c3', name: 'Cover 3 Sky', formation: 'Nickel 3-3', coverageFamily: 'cover_3' },
+    io, coordinatorWindow
+  );
+
+  assert.equal(oracle.decision, 'CHANGE');
+  assert.equal(oracle.replacement.name, 'Quick Flood');
+  assert.equal(coordinatorWindow.state.oracleDecision, 'CHANGE');
+  assert.equal(coordinatorWindow.state.oracleCall, 'Quick Flood');
+  assert.ok(logs.some(line => line.includes('[OC] ORACLE: CHANGE TO')));
+});
+
+test('new offensive situation replaces the prior coordinator recommendation and clears pre-snap state', () => {
+  const first = { id: 'first', name: 'First Call', formation: 'I Form Pro' };
+  const second = { id: 'second', name: 'Second Call', formation: 'Gun Trips' };
+  const engine = {
+    recommendPlays({ situation }) {
+      const play = Number(situation.down) === 1 ? first : second;
+      return { recommendations: [{ play, score: 1, reasons: ['test'] }], tendency: { attempts: 0 } };
+    },
+    recordRecommendation() {},
+  };
+  const playbooks = { offense: { plays: [first, second] }, defense: { plays: [] } };
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const { io } = makeIo();
+
+  handleNewSituation(engine, playbooks, firstOffensiveHuddleState(), null, 'first', io, coordinatorWindow);
+  coordinatorWindow.showOracleRecommendation({
+    decision: 'KEEP',
+    defense: { name: 'Cover 3 Sky' },
+    play: first,
+    reason: 'supported',
+  }, firstOffensiveHuddleState());
+
+  const next = { ...firstOffensiveHuddleState(), down: 2, distance: 5, fieldX: 28, lineToGain: 33 };
+  handleNewSituation(engine, playbooks, next, 'first', 'second', io, coordinatorWindow);
+
+  assert.equal(coordinatorWindow.state.coordinatorCall, 'Second Call');
+  assert.equal(coordinatorWindow.state.oracleDecision, null);
+  assert.equal(coordinatorWindow.state.cpuDefense, null);
+});
+
+test('possession change clears the offensive coordinator recommendation', () => {
+  const engine = lifecycleStubEngine();
+  const playbooks = { offense: { plays: [engine.initial, engine.replacement] }, defense: { plays: [] } };
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const { io } = makeIo();
+
+  handleNewSituation(engine, playbooks, firstOffensiveHuddleState(), null, 'offense', io, coordinatorWindow);
+  assert.ok(coordinatorWindow.state.coordinatorCall);
+
+  const defenseState = {
+    ...firstOffensiveHuddleState(),
+    possession: 1,
+    fieldX: 77,
+    lineToGain: 67,
+    yardLine: 77,
+  };
+  handleNewSituation(engine, playbooks, defenseState, 'offense', 'defense', io, coordinatorWindow);
+
+  assert.equal(coordinatorWindow.state.coordinatorCall, null);
+  assert.equal(coordinatorWindow.state.coordinatorPlayId, null);
+});
+
+test('kickoff/return transition does not fabricate a scrimmage OC recommendation', () => {
+  const engine = lifecycleStubEngine();
+  const playbooks = { offense: { plays: [engine.initial, engine.replacement] }, defense: { plays: [] } };
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const { io, logs } = makeIo();
+  const kickoffLike = {
+    ...firstOffensiveHuddleState(),
+    fieldX: 0,
+    lineToGain: 0,
+    distance: 10,
+  };
+
+  assert.equal(isOffensiveScrimmageSituation(kickoffLike), false);
+  handleNewSituation(engine, playbooks, kickoffLike, null, 'kickoff-transition', io, coordinatorWindow);
+
+  assert.equal(engine.calls.length, 0);
+  assert.equal(coordinatorWindow.state.coordinatorCall, null);
+  assert.equal(logs.some(line => line.includes('[OC] CALL:')), false);
 });
