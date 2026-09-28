@@ -126,7 +126,7 @@ class PlaySelectionEngine {
     // available incomplete-information profile. Once a fresh exact call is
     // available, that exact call becomes the dominant current structure.
     const defenseProfile = this.tendencies.recentDefensiveStructures(defensePlay || null);
-    const historicalStructureAvailable = !oracle && defenseProfile.sampleSize > 0;
+    const historicalStructureAvailable = !oracle && defenseProfile.sampleSize >= 2;
 
     const evaluated = plays.map(play => {
       const situationPart = scoreSituation(play, situation);
