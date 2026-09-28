@@ -265,10 +265,108 @@ function authoritativeReceiverRows(structure) {
   });
 }
 
+
+function friendlyTarget(target) {
+  return String(target?.routeFamily || target?.routeType || target?.assignmentName || 'attached route')
+    .replace(/^AssignRouteType_/i, '')
+    .replace(/^RR_/i, '')
+    .replaceAll('_', ' ')
+    .trim();
+}
+
+function targetRead(target, number, detail) {
+  return {
+    number: String(number),
+    button: null,
+    label: friendlyTarget(target),
+    detail,
+    timing: null,
+    assignmentId: target?.assignmentId ?? null,
+    assignmentName: target?.assignmentName || null,
+    playerIndex: target?.playerIndex ?? null,
+    playerLabel: target?.playerLabel || null,
+  };
+}
+
+function deriveScreenExecution(structure) {
+  if (!structure?.available || !structure.classification?.screen) return null;
+  const candidates = structure.routeTargets.filter(target => {
+    const text = norm([target.routeFamily, target.routeType, target.assignmentName].filter(Boolean).join(' '));
+    return /screen|slip|bubble/.test(text);
+  });
+  const targets = candidates.length ? candidates : structure.routeTargets;
+  const ambiguous = targets.length !== 1;
+  return {
+    available: targets.length > 0,
+    status: targets.length ? 'derived_structural' : 'insufficient_assignment_geometry',
+    provenance: PROVENANCE.DERIVED_STRUCTURAL,
+    mode: 'screen',
+    relationship: 'screen_release',
+    keyDefenderRole: 'first defender disrupting the screen release/lane',
+    ambiguous,
+    reads: targets.map((target, index) => targetRead(
+      target,
+      index + 1,
+      ambiguous
+        ? 'EA assignments expose multiple plausible screen attachments; preserve the ambiguity rather than inventing one target.'
+        : 'Let the rush declare, then deliver to the EA-authored screen attachment behind its releasing blockers.'
+    )),
+    alert: null,
+    outlet: null,
+    timingCalibrated: false,
+    warning: ambiguous
+      ? 'Screen path is coordinator-derived from EA assignments and the exact intended target remains ambiguous.'
+      : 'Screen target structure is derived from EA-authored assignments; the read instruction is coordinator-derived, not EA-authored.',
+  };
+}
+
+function deriveRpoExecution(structure) {
+  if (!structure?.available || !structure.classification?.rpo) return null;
+  const attachments = structure.routeTargets.filter(target => {
+    const text = norm([target.routeFamily, target.routeType, target.assignmentName].filter(Boolean).join(' '));
+    return /slant|glance|post|bubble|screen|flat|out|stick/.test(text);
+  });
+  const targets = attachments.length ? attachments : structure.routeTargets;
+  const ambiguous = targets.length !== 1;
+  const reads = targets.map((target, index) => targetRead(
+    target,
+    index + 1,
+    'If the conflict defender inserts into the run fit, throw the attached EA-authored route into the space he vacates.'
+  ));
+  reads.push({
+    number: String(reads.length + 1),
+    button: null,
+    label: 'give',
+    detail: 'If the conflict defender stays with the pass attachment, give the run. Exact live defender identity requires player tracking.',
+    timing: null,
+    assignmentId: null,
+    assignmentName: null,
+    playerIndex: null,
+    playerLabel: null,
+  });
+  return {
+    available: targets.length > 0 && structure.classification.qbActions.includes('ID_HANDOFF_OPTION'),
+    status: targets.length ? 'derived_structural' : 'insufficient_assignment_geometry',
+    provenance: PROVENANCE.DERIVED_STRUCTURAL,
+    mode: 'rpo',
+    relationship: 'run_pass_conflict',
+    keyDefenderRole: 'run/pass conflict defender (LB or overhang depending on attachment)',
+    ambiguous,
+    reads,
+    alert: null,
+    outlet: null,
+    timingCalibrated: false,
+    warning: 'RPO decision is coordinator-derived from EA-authored handoff-option and pass-attachment assignments; exact conflict-defender identity is not known without player tracking.',
+  };
+}
+
+
 module.exports = {
   PROVENANCE,
   buildAuthoritativePlayStructure,
   deriveRunExecution,
+  deriveScreenExecution,
+  deriveRpoExecution,
   authoritativeReceiverRows,
   friendlyEnum,
   laneFromGap,
