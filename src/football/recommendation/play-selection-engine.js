@@ -121,7 +121,12 @@ class PlaySelectionEngine {
     const tendency = this.tendencies.summarize(situation);
     const events = this.store.getAll();
     const oracle = Boolean(defensePlay?.name || defensePlay?.coverageFamily || defensePlay?.assignmentFamilies?.length);
-    const defenseProfile = oracle ? this.tendencies.recentDefensiveStructures(defensePlay) : null;
+    // Both OC stages use the shared structural counter model. Before the exact
+    // defense is known, recent opponent defensive structure supplies the best
+    // available incomplete-information profile. Once a fresh exact call is
+    // available, that exact call becomes the dominant current structure.
+    const defenseProfile = this.tendencies.recentDefensiveStructures(defensePlay || null);
+    const historicalStructureAvailable = !oracle && defenseProfile.sampleSize > 0;
 
     const evaluated = plays.map(play => {
       const situationPart = scoreSituation(play, situation);
@@ -130,9 +135,12 @@ class PlaySelectionEngine {
       const setupPart = setupScore(this.sequences, this.store, play);
       const executionRepetition = recentRepetitionPenalty(events, play);
       const riskPenalty = situationPart.risk > 0 ? -0.25 * situationPart.risk : 0;
-      const counter = oracle
-        ? evaluateOffensiveCandidate({ defenseProfile, play, knowledge: this.knowledge, situation })
-        : null;
+      const counter = evaluateOffensiveCandidate({
+        defenseProfile,
+        play,
+        knowledge: this.knowledge,
+        situation
+      });
       const family = counterFamily(counter, play);
       const recommendationPenalty = this.recommendationHistory
         ? this.recommendationHistory.penalty('offense', play, family)
@@ -148,11 +156,15 @@ class PlaySelectionEngine {
         recommendationRepetition: recommendationPenalty.score,
         risk: riskPenalty,
       } : {
+        // Stage 1 remains counter-first, but the counter evidence comes from
+        // prior defensive structure rather than a not-yet-known exact call.
+        historicalStructureFit: historicalStructureAvailable ? counter.score * 0.55 : 0,
         situation: situationPart.score,
-        opponentTendency: tendencyPart.score,
+        historicalTendency: tendencyPart.score * 0.75,
         gameDayPerformance: performancePart.score,
         setupValue: setupPart.score,
-        repetition: executionRepetition,
+        executionRepetition,
+        recommendationRepetition: recommendationPenalty.score,
         risk: riskPenalty,
       };
 
@@ -163,10 +175,14 @@ class PlaySelectionEngine {
         ...performancePart.reasons.map(r => `secondary execution evidence: ${r}`),
         ...recommendationPenalty.reasons,
       ] : [
+        ...(historicalStructureAvailable
+          ? counter.reasons.map(r => r.replace('punishes current defense with:', 'historical defensive profile favors:'))
+          : []),
         ...situationPart.reasons,
         ...tendencyPart.reasons,
         ...performancePart.reasons,
-        ...setupPart.reasons
+        ...setupPart.reasons,
+        ...recommendationPenalty.reasons,
       ];
 
       return {
@@ -193,10 +209,14 @@ class PlaySelectionEngine {
       };
     });
 
-    let pool = evaluated;
-    if (oracle) {
-      const situationValid = evaluated.filter(row => row.diagnostic.counter?.gate?.valid !== false);
-      const counterValid = situationValid.filter(row => row.diagnostic.counter?.valid === true);
+    const situationValid = evaluated.filter(row => row.diagnostic.counter?.gate?.valid !== false);
+    const counterValid = situationValid.filter(row => row.diagnostic.counter?.valid === true);
+    let pool = situationValid;
+    if (oracle || historicalStructureAvailable) {
+      // Exact defense gets the full counter gate. Stage 1 uses the same gate
+      // when history supplies useful structural evidence, but degrades to the
+      // situation-valid set when the historical taxonomy cannot distinguish
+      // a viable answer.
       pool = counterValid.length ? counterValid : situationValid;
     }
 
@@ -211,8 +231,13 @@ class PlaySelectionEngine {
       exactDefense: defensePlay,
       defenseProfile,
       recommendations: ranked.slice(0, limit),
+      // Expose the complete situation/counter-valid pool so the live Oracle
+      // stage can compare the stored initial call with the exact-defense best
+      // answer without rerunning a different scoring lifecycle.
+      strategicCandidates: ranked,
       evaluated: evaluated.length,
       strategicEligible: pool.length,
+      informationMode: oracle ? "exact_defense" : (historicalStructureAvailable ? "historical_defense_structure" : "situation_only"),
       selectionPolicy: oracle ? "exact_defense_oracle_counter_first" : "pre_call_no_current_exact_defense"
     };
   }
