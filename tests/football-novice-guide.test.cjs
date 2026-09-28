@@ -343,3 +343,95 @@ test('existing execution-advisor behavior remains intact', () => {
   assert.equal(result.selectedPlay.name, 'PA JET SWEEP');
   assert.equal(result.defense.name, 'Cover 1 Robber Press');
 });
+
+
+test('authoritative structural guide is available even when legacy concept knowledge is unknown', () => {
+  const route = (id, name, family, depth) => ({
+    positionAssignId: id,
+    assignmentName: name,
+    routeType: `AssignRouteType_${family}`,
+    assignmentAssetPath: `assignments/${name}`,
+    assignmentActions: [],
+    assignmentSemantics: {
+      route: {
+        routeFamily: family,
+        points: [{ x: 0, y: 0 }, { x: family === 'flat' ? 5 : -4, y: depth }],
+        segments: [],
+        events: [],
+        motion: [],
+        optionRoutes: [],
+        movementCost: depth,
+        maxDepth: depth,
+      },
+      blocking: null,
+    },
+    source: 'EA_AUTHORED',
+  });
+  const expanded = {
+    status: 'resolved',
+    playKey: 'play:authoritative-only',
+    formation: { name: 'Singleback' },
+    set: {
+      name: 'Ace',
+      positions: Array.from({ length: 11 }, (_, index) => ({
+        index,
+        positionType: index === 0 ? 'QB' : `P${index}`,
+        x: index * 2,
+        y: 0,
+      })),
+    },
+    play: { name: 'Authoritative Only', offensePlayType: 'OffensePlayType_Pass', runHole: null },
+    players: Array.from({ length: 11 }, (_, index) => ({
+      index,
+      resolutionStatus: 'resolved_exact_identity',
+      assignment: index === 2
+        ? route(2, 'Flat', 'flat', 3)
+        : index === 3
+          ? route(3, 'Corner', 'corner', 12)
+          : index === 4
+            ? route(4, 'Post', 'post', 18)
+            : {
+                positionAssignId: 100 + index,
+                assignmentName: `Block ${index}`,
+                assignmentActions: [],
+                assignmentSemantics: { route: null, blocking: { passBlocks: [], runBlocks: [], leadBlocks: [] } },
+                source: 'EA_AUTHORED',
+              },
+    })),
+  };
+  const knowledge = {
+    advise: ({ concept }) => ({
+      known: false,
+      concept,
+      headline: null,
+      reasons: [],
+      coaching: { preSnap: [], postSnap: [] },
+      coverage: null,
+      pressureDetected: false,
+    }),
+    resolveConcept: () => null,
+    resolveCoverage: () => null,
+  };
+  const engine = new FootballEngine({
+    knowledge,
+    executionAdvisor: { eaPlayKnowledgeStore: { expandPlay: () => expanded } },
+  });
+  const result = engine.adviseExecution({
+    selectedPlay: {
+      id: 'authoritative-only',
+      name: 'Not In Legacy Knowledge',
+      formation: 'Singleback Ace',
+      type: 'PASS',
+      concepts: [],
+      eaAuthority: { playKey: expanded.playKey },
+    },
+    defensiveCall: { id: 'd', name: 'Unmapped Defense' },
+  });
+
+  assert.equal(result.advice.known, false);
+  assert.equal(result.available, true);
+  assert.equal(result.guide.diagramMode, 'assignment_geometry');
+  assert.equal(result.guide.progressionStatus, 'derived');
+  assert.ok(result.guide.reads.length >= 3);
+  assert.ok(result.guide.reads.every(read => read.button == null));
+});
