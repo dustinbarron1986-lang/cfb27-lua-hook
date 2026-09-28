@@ -263,3 +263,87 @@ test('render() shows audible advice alongside the existing read/guide surface', 
   assert.match(html, /AUDIBLE: RUN/);
   assert.match(html, /LIGHT box \/ MEDIUM confidence/);
 });
+
+
+test('user-selected play does not overwrite the persistent coordinator recommendation state', () => {
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const state = { quarter: 1, gameClockSeconds: 700, down: 1, distance: 10, yardLine: 25 };
+
+  coordinatorWindow.showRecommendation({
+    available: true,
+    play: { id: 'oc-1', name: 'PA Power G Drive', formation: 'I Form Pro' },
+    reasons: ['Best situation/tendency-based call'],
+  }, state);
+
+  coordinatorWindow.showSelection(
+    {
+      type: 'selected',
+      play: { id: 'user-1', name: 'HB Slam', formation: 'I Form Pro' },
+      opponentPlay: { name: 'Nickel Blitz 1', formation: 'Nickel 2-4 Dbl Mug' },
+    },
+    { available: true, advice: { known: false }, guide: { mode: 'run', headline: 'Hit the crease', watch: 'Mike', steps: ['Press inside'] } },
+    state
+  );
+
+  assert.equal(coordinatorWindow.state.coordinatorCall, 'PA Power G Drive');
+  assert.equal(coordinatorWindow.state.coordinatorFormation, 'I Form Pro');
+  assert.equal(coordinatorWindow.state.userCall, 'HB Slam');
+  assert.equal(coordinatorWindow.state.cpuDefense, 'Nickel Blitz 1');
+  // Legacy state may still expose the selected play; the dedicated coordinator
+  // fields are the persistent UI source of truth.
+  assert.equal(coordinatorWindow.state.call, 'HB Slam');
+});
+
+test('render keeps coordinator call primary while showing user selection, CPU defense, Oracle and read surfaces separately', () => {
+  const { context, elements } = loadClientScript();
+  context.render({
+    phase: 'selected',
+    coordinatorCall: 'PA Power G Drive',
+    coordinatorFormation: 'I Form Pro',
+    coordinatorWhy: ['Best situation/tendency-based call'],
+    userCall: 'HB Slam',
+    userFormation: 'I Form Pro',
+    cpuDefense: 'Nickel Blitz 1',
+    cpuDefenseFormation: 'Nickel 2-4 Dbl Mug',
+    oracleDecision: 'CHANGE',
+    oracleCall: 'PA Power G Drive',
+    oracleFormation: 'I Form Pro',
+    oracleReason: 'The revealed defense creates a materially better counter.',
+    guide: { mode: 'run', headline: 'Attack the crease', watch: 'Mike linebacker', steps: ['Press the A gap'] },
+  });
+
+  assert.equal(elements.get('play').textContent, 'PA Power G Drive');
+  assert.equal(elements.get('formation').textContent, 'I Form Pro');
+  const contextHtml = elements.get('defense').innerHTML;
+  assert.match(contextHtml, /USER SELECTED/);
+  assert.match(contextHtml, /HB Slam/);
+  assert.match(contextHtml, /CPU DEFENSE/);
+  assert.match(contextHtml, /Nickel Blitz 1/);
+  assert.match(contextHtml, /ORACLE/);
+  assert.match(contextHtml, /CHANGE TO PA Power G Drive/);
+  assert.match(elements.get('detail').innerHTML, /WHY/);
+  assert.match(elements.get('detail').innerHTML, /Attack the crease/);
+});
+
+test('showOracleRecommendation adds exact-defense decision without replacing the coordinator call', () => {
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const state = { quarter: 1, gameClockSeconds: 700, down: 1, distance: 10, yardLine: 25 };
+  coordinatorWindow.showRecommendation({
+    available: true,
+    play: { id: 'oc-1', name: 'PA Power G Drive', formation: 'I Form Pro' },
+    reasons: ['Best situation/tendency-based call'],
+  }, state);
+
+  coordinatorWindow.showOracleRecommendation({
+    decision: 'KEEP',
+    initialPlay: { id: 'oc-1', name: 'PA Power G Drive', formation: 'I Form Pro' },
+    play: { id: 'oc-1', name: 'PA Power G Drive', formation: 'I Form Pro' },
+    defense: { name: 'Cover 3 Sky', formation: 'Nickel 3-3' },
+    reason: 'The initial call remains the best exact counter.',
+  }, state);
+
+  assert.equal(coordinatorWindow.state.coordinatorCall, 'PA Power G Drive');
+  assert.equal(coordinatorWindow.state.cpuDefense, 'Cover 3 Sky');
+  assert.equal(coordinatorWindow.state.oracleDecision, 'KEEP');
+  assert.equal(coordinatorWindow.state.oracleCall, null);
+});
