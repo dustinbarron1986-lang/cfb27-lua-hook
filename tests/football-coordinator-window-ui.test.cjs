@@ -251,7 +251,7 @@ test('render() shows audible advice alongside the existing read/guide surface', 
     formation: 'Gun Spread',
     defense: 'Cover 4 Drop',
     defenseFormation: 'Dime 3-2',
-    read: ['Read leverage'],
+    read: 'Read leverage',
     guide: null,
     audibleRecommendation: {
       decision: 'RUN',
