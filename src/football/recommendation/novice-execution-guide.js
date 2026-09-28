@@ -383,30 +383,65 @@ function verifiedProgression(playKnowledge) {
 function derivedProgression(playKnowledge) {
   const derived = playKnowledge?.derivedProgression;
   if (!derived?.available || derived.status !== 'derived_structural' || !Array.isArray(derived.reads)) return null;
-  return {
-    ...derived,
-    reads: derived.reads.map((read, index) => ({
-      number: read.number || String(index + 1),
-      button: read.button || null,
-      label: read.label || `Read ${index + 1}`,
-      detail: read.detail || '',
-      timing: read.timing || null,
-      assignmentId: read.assignmentId ?? null,
-      assignmentName: read.assignmentName || null
-    }))
-  };
+  const reads = derived.reads.map((read, index) => ({
+    number: read.number || String(index + 1),
+    button: read.button || null,
+    label: read.label || `Read ${index + 1}`,
+    detail: read.detail || '',
+    timing: read.timing || null,
+    assignmentId: read.assignmentId ?? null,
+    assignmentName: read.assignmentName || null
+  }));
+
+  if (reads.length && derived.keyDefenderRole) {
+    reads[0] = {
+      ...reads[0],
+      detail: `KEY: ${derived.keyDefenderRole}. ${reads[0].detail}`.trim()
+    };
+  }
+  if (derived.alert) {
+    reads.push({
+      number: 'ALERT',
+      button: null,
+      label: derived.alert.label || 'Alert route',
+      detail: 'Alert only when leverage clearly gives it; this classification is coordinator-derived from the EA-authored route structure.',
+      timing: null,
+      assignmentId: derived.alert.assignmentId ?? null,
+      assignmentName: null
+    });
+  }
+  if (derived.outlet && !reads.some(read => read.assignmentId != null && read.assignmentId === derived.outlet.assignmentId)) {
+    reads.push({
+      number: 'OUT',
+      button: null,
+      label: derived.outlet.label || 'Outlet',
+      detail: 'Outlet/checkdown derived from the underneath EA-authored route structure.',
+      timing: null,
+      assignmentId: derived.outlet.assignmentId ?? null,
+      assignmentName: null
+    });
+  }
+
+  return { ...derived, reads };
 }
 
 function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge } = {}) {
   if (!selectedPlay) return null;
   const concept = advice?.concept || selectedPlay.primaryConcept || selectedPlay.concepts?.[0] || null;
   const playName = norm(selectedPlay.name);
-  const isRpo = selectedPlay.playKind === 'RPO' || selectedPlay.modifiers?.includes('rpo') || /\brpo\b/.test(playName);
-  const type = isRpo ? 'rpo' : (selectedPlay.type === 'RUN' ? 'run' : 'pass');
+  const authoritativeKind = playKnowledge?.authoritative?.classification?.kind || null;
+  const isRpo = authoritativeKind === 'rpo' ||
+    selectedPlay.playKind === 'RPO' ||
+    selectedPlay.modifiers?.includes('rpo') ||
+    /\brpo\b/.test(playName);
+  const type = authoritativeKind === 'run'
+    ? 'run'
+    : (authoritativeKind === 'screen' ? 'pass' : (isRpo ? 'rpo' : (selectedPlay.type === 'RUN' ? 'run' : 'pass')));
   const coverageNote = coveragePlain(advice?.coverage || null, defensiveCall?.name);
 
   if (type === 'run') {
-    const t = runTemplate(selectedPlay, concept);
+    const structural = playKnowledge?.structuralRun;
+    const t = structural?.available ? structural : runTemplate(selectedPlay, concept);
     return {
       mode: 'run',
       concept: concept || null,
@@ -417,6 +452,11 @@ function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge }
       lane: t.lane,
       coverageNote: /\b(blitz|pressure|zero)\b/i.test(String(defensiveCall?.name || ''))
         ? 'They are sending extra rushers. The lane may appear quickly, so make one cut and get upfield.'
+        : null,
+      progressionStatus: structural?.available ? 'derived' : 'unverified',
+      routeStatus: structural?.available ? 'ea_assignment_geometry' : (playKnowledge?.routeKnowledge || 'unknown'),
+      warning: structural?.available
+        ? 'Run aim/key/cut guidance is coordinator-derived from EA-authored blocking assignments and play type. Numeric runHole values are not decoded into invented gap labels.'
         : null,
       terminology: null
     };
@@ -435,6 +475,7 @@ function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge }
         : 'This route family is partially supported by the assignment data.'
     }));
 
+  const authoritative = Boolean(playKnowledge?.authoritative?.available);
   const t = type === 'rpo' ? rpoTemplate(selectedPlay) : passTemplate(selectedPlay, concept);
   const note = type === 'rpo'
     ? (/\b(blitz|pressure|zero)\b/i.test(String(defensiveCall?.name || ''))
@@ -463,7 +504,7 @@ function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge }
     return {
       mode: type,
       concept: concept || null,
-      family: t.family,
+      family: derivedReads.relationship || t.family,
       diagramMode: 'assignment_geometry',
       diagramLabel: 'EA ASSIGNMENT VIEW — DERIVED READS',
       reads: derivedReads.reads,
@@ -473,7 +514,13 @@ function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge }
       progressionStatus: 'derived',
       routeStatus: 'ea_assignment_geometry',
       timingCalibrated: Boolean(derivedReads.timingCalibrated),
-      warning: derivedReads.warning,
+      warning: [
+        derivedReads.warning,
+        derivedReads.playAction
+          ? `Play-action is supported by EA quarterback action evidence (${derivedReads.playActionEvidence || 'handoff fake'}); the route read order remains coordinator-derived.`
+          : null,
+        derivedReads.ambiguous ? 'Structural interpretation remains ambiguous; no EA-authored progression is claimed.' : null
+      ].filter(Boolean).join(' '),
       terminology: null
     };
   }
@@ -483,7 +530,7 @@ function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge }
   return {
     mode: type,
     concept: concept || null,
-    family: t.family,
+    family: authoritative ? (playKnowledge?.authoritative?.classification?.kind || t.family) : t.family,
     diagramMode: exactGeometryCount ? 'assignment_geometry' : (partial ? 'assignment_partial' : 'concept_estimated'),
     diagramLabel: exactGeometryCount ? 'EA ASSIGNMENT VIEW — PARTIAL' : (partial ? 'ASSIGNMENT VIEW — PARTIAL' : 'CONCEPT VIEW — ESTIMATED'),
     reads: [],
