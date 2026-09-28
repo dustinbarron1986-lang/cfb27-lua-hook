@@ -181,7 +181,12 @@ function classifyDefensiveStructure(play = {}, knowledge = null) {
   if (balancedFront) { tags.add('balanced_front'); capabilities.add('interior_fit'); capabilities.add('edge_support'); }
   if (lightPackage) tags.add('light_package');
 
-  if (['cover_2', 'cover_3', 'cover_4', 'cover_6', 'cover_2_man'].includes(coverageFamily)) capabilities.add('explosive_protection');
+  if (['cover_2', 'cover_3', 'cover_4', 'cover_6', 'cover_2_man'].includes(coverageFamily) || zone) {
+    // EA-authored zone-responsibility assignments are sufficient structural
+    // evidence that this is not a pure all-out/no-help call, even when the
+    // display name does not normalize to a specific Cover-N family.
+    capabilities.add('explosive_protection');
+  }
   if (zone) { capabilities.add('underneath_zone'); capabilities.add('screen_control'); }
   if (['cover_3', 'cover_4', 'cover_6'].includes(coverageFamily)) {
     capabilities.add('edge_support');
