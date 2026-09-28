@@ -255,8 +255,10 @@ class DefensiveSelectionEngine {
       }
 
       const situationPart = defensiveSituationScore(play, situation);
-      const repetition = recentDefenseRepetitionPenalty(events, play) * 0.35;
-      const familyRepetition = recentDefenseFamilyRepetitionPenalty(events, this.knowledge, defenseFamilyKey) * 0.35;
+      // These are predictability controls inside the already-gated valid
+      // answer set, so retain their established magnitudes.
+      const repetition = recentDefenseRepetitionPenalty(events, play);
+      const familyRepetition = recentDefenseFamilyRepetitionPenalty(events, this.knowledge, defenseFamilyKey);
       const recommendationPenalty = this.recommendationHistory
         ? this.recommendationHistory.penalty("defense", play, defenseFamilyKey)
         : { score: 0, reasons: [], exactHits: 0, familyHits: 0 };
