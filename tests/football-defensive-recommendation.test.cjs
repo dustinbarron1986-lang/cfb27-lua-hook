@@ -41,7 +41,7 @@ test('recommendDefenses() returns ranked candidates', () => {
 
   assert.equal(ranked.evaluated, defense.plays.length);
   assert.ok(ranked.recommendations.length > 0);
-  assert.equal(ranked.recommendations[0].selectionPolicy, 'exact_offense_oracle_with_empirical_override');
+  assert.equal(ranked.recommendations[0].selectionPolicy, 'exact_offense_oracle_counter_first');
 });
 
 test('catalog-resolved offensive concept influences theory scoring', () => {
@@ -147,8 +147,10 @@ test('cold-start recommendation clearly has low/no empirical evidence rather tha
     assert.equal(rec.diagnostic.exactMatchup.attempts, 0);
     assert.equal(rec.diagnostic.empiricalReliability, 0);
     assert.equal(rec.components.observedExactMatchup, 0);
-    // Theory should carry the full weight of the score when there's no evidence.
-    assert.equal(rec.components.bootstrapTheory, rec.score - rec.components.situation - rec.components.repetition);
+    // Counter structure is now the primary cold-start signal; empirical
+    // performance remains zero until a snap actually supplies evidence.
+    assert.ok(Number.isFinite(rec.components.counterFit));
+    assert.equal(rec.selectionPolicy, 'exact_offense_oracle_counter_first');
   }
 });
 
