@@ -410,6 +410,15 @@ function detail(label, value) {
     : esc(value);
   return '<span class="smallLabel">' + esc(label) + '</span>' + body;
 }
+function renderAudibleRecommendation(audible) {
+  if (!audible) return '';
+  const decision = audible.decision || 'KEEP';
+  const box = audible.box || {};
+  const reason = audible.reason || 'No pre-snap audible adjustment.';
+  return '<div class="plainCallout"><b>AUDIBLE: ' + esc(decision) + '</b> — ' +
+    esc((box.classification || 'NEUTRAL') + ' box / ' + (box.confidence || 'LOW') + ' confidence') +
+    '<div class="guideText">' + esc(reason) + '</div></div>';
+}
 function routePath(kind) {
   const p = {
     crossLeftToRight: 'M55 145 C105 120 165 100 255 92',
@@ -598,8 +607,9 @@ function render(s) {
       els.defense.innerHTML = detail('DEFENSE', s.defense + (s.defenseFormation ? ' — ' + s.defenseFormation : ''));
     }
     els.detail.className = 'read';
-    els.detail.innerHTML = renderGuide(s.guide) ||
+    const guideHtml = renderGuide(s.guide) ||
       detail('READ', Array.isArray(s.read) && s.read.length ? s.read : (s.read || 'No specific adjustment.'));
+    els.detail.innerHTML = guideHtml + renderAudibleRecommendation(s.audibleRecommendation);
   } else if (s.phase === 'defensive_huddle') {
     els.eyebrow.textContent = 'DEFENSIVE CALL';
     els.play.textContent = s.call || 'NO CALL AVAILABLE';
@@ -783,6 +793,7 @@ class CoordinatorWindow {
       cpuFormation: null,
       read: null,
       guide: null,
+      audibleRecommendation: null,
       result: null,
       error: null,
       updatedAt: new Date().toISOString()
@@ -850,6 +861,7 @@ class CoordinatorWindow {
       cpuFormation: null,
       read: null,
       guide: null,
+      audibleRecommendation: null,
       result: null
     });
   }
@@ -882,6 +894,7 @@ class CoordinatorWindow {
       defenseFormation: null,
       read: null,
       guide: null,
+      audibleRecommendation: null,
       result: null
     });
   }
@@ -906,6 +919,7 @@ class CoordinatorWindow {
       cpuFormation: null,
       read: notes,
       guide: advice?.guide || null,
+      audibleRecommendation: advice?.audible || null,
       result: null
     });
   }

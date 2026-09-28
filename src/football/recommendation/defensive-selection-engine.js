@@ -35,6 +35,26 @@ function recentDefenseRepetitionPenalty(events, play, window = 6) {
   return -hits * 0.65;
 }
 
+function recentDefenseFamilyRepetitionPenalty(events, knowledge, family, window = 6) {
+  if (!family) return 0;
+  const recent = events.slice(-window);
+  const hits = recent.filter(event => defenseFamily(knowledge, event.opponentPlay) === family).length;
+  // Modest predictability signal only. It deliberately caps below one point so
+  // legitimate football/situation evidence can still justify staying in the
+  // same coverage/structure family.
+  return hits ? -Math.min(hits, 3) * 0.18 : 0;
+}
+
+function coldStartStructuralPrior(knowledge, play, theory) {
+  if (theory?.evaluations?.length) return { score: 0, reasons: [] };
+  const family = defenseFamily(knowledge, play);
+  if (!family) return { score: 0, reasons: [] };
+  return {
+    score: 0.08,
+    reasons: [`cold-start structural prior: recognized defensive family ${family}`],
+  };
+}
+
 function empiricalReliability(attempts) {
   // The observed matchup becomes the majority signal around five samples and
   // approaches source-of-truth status with a dozen-plus samples.
@@ -165,9 +185,12 @@ class DefensiveSelectionEngine {
     // telemetry-graded events (never from a mere recommendation display).
     // Used only as a tie-break after scoring -- never adjusts `score` itself.
     const lastUsedIndex = new Map();
+    const lastUsedFamilyIndex = new Map();
     events.forEach((event, index) => {
       const id = event.opponentPlay?.id;
       if (id != null) lastUsedIndex.set(String(id), index);
+      const family = defenseFamily(this.knowledge, event.opponentPlay);
+      if (family) lastUsedFamilyIndex.set(family, index);
     });
 
     const ranked = plays.map(play => {
@@ -176,6 +199,7 @@ class DefensiveSelectionEngine {
       const contextualMatchup = this.store.summarizeMatchup(offensePlay?.id, play.id, situation);
       const offenseFamilyKey = offenseFamily(this.knowledge, offensePlay);
       const defenseFamilyKey = defenseFamily(this.knowledge, play);
+      const structuralPrior = coldStartStructuralPrior(this.knowledge, play, theory);
       const familyMatchup = this.store.summarizeFamilyMatchup(offenseFamilyKey, defenseFamilyKey);
       const contextualFamilyMatchup = this.store.summarizeFamilyMatchup(offenseFamilyKey, defenseFamilyKey, situation);
       const overallDefense = this.store.summarizeDefensePlay(play.id);
@@ -208,17 +232,23 @@ class DefensiveSelectionEngine {
 
       const situationPart = defensiveSituationScore(play, situation);
       const repetition = recentDefenseRepetitionPenalty(events, play);
+      const familyRepetition = recentDefenseFamilyRepetitionPenalty(events, this.knowledge, defenseFamilyKey);
       const lastUsedAt = lastUsedIndex.has(String(play.id)) ? lastUsedIndex.get(String(play.id)) : -1;
+      const lastFamilyUsedAt = defenseFamilyKey && lastUsedFamilyIndex.has(defenseFamilyKey)
+        ? lastUsedFamilyIndex.get(defenseFamilyKey)
+        : -1;
 
       const components = {
         bootstrapTheory,
+        structuralPrior: structuralPrior.score,
         observedExactMatchup: observedMatchup,
         observedSituationMatchup: observedContext,
         observedFamilyMatchup,
         observedFamilySituation: observedFamilyContext,
         observedExecution: execution,
         situation: situationPart.score,
-        repetition
+        repetition,
+        familyRepetition
       };
 
       const total = Object.values(components).reduce((a,b) => a + b, 0);
@@ -229,6 +259,7 @@ class DefensiveSelectionEngine {
         ...familyEmpirical.reasons.map(r => `family empirical matchup: ${r}`),
         ...contextualFamilyEmpirical.reasons.map(r => `family same-situation matchup: ${r}`),
         ...executionReasons,
+        ...structuralPrior.reasons,
         ...situationPart.reasons
       ];
 
@@ -254,19 +285,20 @@ class DefensiveSelectionEngine {
           familySituationMatchup: contextualFamilyMatchup,
           overallDefense,
           totalComponents: components,
-          lastUsedAt
+          lastUsedAt,
+          lastFamilyUsedAt
         },
         selectionPolicy: "exact_offense_oracle_with_empirical_override"
       };
     }).sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
-      // Genuine tie: prefer whichever candidate was least recently ACTUALLY
-      // called (largest index = most recent, so ascending index = least
-      // recent first). Never-used candidates (-1) sort ahead of any used
-      // one. If both are never-used, this comparator returns 0 and
-      // Array.prototype.sort's stability (guaranteed in this engine's Node
-      // version) preserves the original candidate-pool order -- no
-      // randomization, no invented distinction.
+      // Genuine score tie: prefer the least recently ACTUALLY used defensive
+      // family, then the least recently used exact call. This is deterministic
+      // predictability control, not a diversity mandate; the family penalty
+      // above is intentionally small enough for stronger football evidence to win.
+      if (a.diagnostic.lastFamilyUsedAt !== b.diagnostic.lastFamilyUsedAt) {
+        return a.diagnostic.lastFamilyUsedAt - b.diagnostic.lastFamilyUsedAt;
+      }
       return a.diagnostic.lastUsedAt - b.diagnostic.lastUsedAt;
     });
 
@@ -285,5 +317,7 @@ module.exports = {
   DefensiveSelectionEngine,
   empiricalReliability,
   summarizeEmpiricalDefense,
-  theoryScore
+  theoryScore,
+  recentDefenseFamilyRepetitionPenalty,
+  coldStartStructuralPrior
 };

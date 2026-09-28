@@ -19,6 +19,13 @@ try {
   buildNoviceGuide = null;
 }
 
+let advisePreSnapAudible = null;
+try {
+  ({ advisePreSnapAudible } = require("./pre-snap-audible-advisor"));
+} catch (_) {
+  advisePreSnapAudible = null;
+}
+
 let buildPassingPlayArt = null;
 let deriveStructuralProgression = null;
 let analyzeRunAssignments = null;
@@ -223,6 +230,13 @@ class ExecutionAdvisor {
     const guide = buildNoviceGuide
       ? buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge })
       : null;
+    const audible = advisePreSnapAudible
+      ? advisePreSnapAudible({
+          selectedPlay,
+          authoritativeClassification: authoritative?.authoritative?.classification || null,
+          defensiveCall,
+        })
+      : null;
 
     const authoritativeUseful = Boolean(
       authoritative?.structuralRun?.available ||
@@ -243,6 +257,7 @@ class ExecutionAdvisor {
       defense: defensiveCall,
       advice,
       guide,
+      audible,
       authority: authoritative?.authoritative || null,
     };
   }
