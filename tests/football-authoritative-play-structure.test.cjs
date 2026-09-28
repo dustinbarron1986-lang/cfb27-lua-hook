@@ -282,7 +282,7 @@ test('multi-cut deterministic route matures at final meaningful authored cut, no
   const traits = routeTraits(whip);
   assert.equal(traits.maturity.primaryBreak.order, 3);
   assert.equal(traits.maturity.source, 'final_meaningful_authored_cut');
-  assert.equal(traits.maturity.bucket, 'early');
+  assert.equal(traits.maturity.bucket, 'late', 'authored delay shifts the relative bucket later without converting units to seconds');
 });
 
 test('flat maturity ignores long whole-route cost while vertical maturity uses depth when no meaningful cut exists', () => {
