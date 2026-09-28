@@ -108,12 +108,13 @@ function counterFamily(counter, play) {
 }
 
 class PlaySelectionEngine {
-  constructor({ store, sequences, tendencies, knowledge = null, recommendationHistory = null }) {
+  constructor({ store, sequences, tendencies, knowledge = null, recommendationHistory = null, strategy = null }) {
     this.store = store;
     this.sequences = sequences;
     this.tendencies = tendencies;
     this.knowledge = knowledge;
     this.recommendationHistory = recommendationHistory;
+    this.strategy = strategy;
   }
 
   rank({ playbook, situation, defensePlay = null, limit = 5 }) {
@@ -145,6 +146,9 @@ class PlaySelectionEngine {
       const recommendationPenalty = this.recommendationHistory
         ? this.recommendationHistory.penalty('offense', play, family)
         : { score: 0, reasons: [], exactHits: 0, familyHits: 0 };
+      const strategyPart = !oracle && this.strategy?.scoreCandidate
+        ? this.strategy.scoreCandidate(play, situation, { defenseProfile, counter })
+        : { score: 0, components: {}, reasons: [], planReasons: [], entry: null };
 
       const components = oracle ? {
         counterFit: counter.score,
@@ -166,6 +170,14 @@ class PlaySelectionEngine {
         executionRepetition,
         recommendationRepetition: recommendationPenalty.score,
         risk: riskPenalty,
+        gameplanFit: strategyPart.components?.gameplanFit || 0,
+        callSheetMembership: strategyPart.components?.callSheetMembership || 0,
+        sequencingValue: strategyPart.components?.sequencingValue || 0,
+        setupValue: strategyPart.components?.setupValue || 0,
+        payoffValue: strategyPart.components?.payoffValue || 0,
+        tendencyBreakingValue: strategyPart.components?.tendencyBreakingValue || 0,
+        aggression: strategyPart.components?.aggression || 0,
+        audibleFlexibility: strategyPart.components?.audibleFlexibility || 0,
       };
 
       const total = Object.values(components).reduce((a,b) => a + b, 0);
@@ -183,6 +195,8 @@ class PlaySelectionEngine {
         ...performancePart.reasons,
         ...setupPart.reasons,
         ...recommendationPenalty.reasons,
+        ...(strategyPart.planReasons || []).map(r => `gameplan: ${r}`),
+        ...(strategyPart.reasons || []).map(r => `strategy: ${r}`),
       ];
 
       return {
@@ -192,6 +206,10 @@ class PlaySelectionEngine {
         reasons,
         tendencyContext: tendency,
         exactDefense: defensePlay,
+        strategicWhy: [
+          ...(strategyPart.planReasons || []),
+          ...(strategyPart.reasons || []),
+        ].slice(0, 3),
         diagnostic: {
           side: "offense",
           playId: play.id,
@@ -203,6 +221,7 @@ class PlaySelectionEngine {
           sameSituation: performancePart.situationSummary,
           performanceComponents: performancePart.components,
           recommendationExposure: recommendationPenalty,
+          strategy: strategyPart,
           totalComponents: components
         },
         selectionPolicy: oracle ? "exact_defense_oracle_counter_first" : "pre_call_no_current_exact_defense"

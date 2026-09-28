@@ -296,7 +296,7 @@ function renderPage(title = 'CFB 27 Offensive Coordinator') {
     align-items: center;
   }
   .settingsBody label { color: var(--muted); font-size: 12px; font-weight: 700; }
-  .settingsBody select {
+  .settingsBody select, .settingsBody input {
     background: #0f141a; color: var(--text); border: 1px solid var(--line);
     border-radius: 7px; padding: 6px 8px; font-size: 13px; max-width: 100%;
   }
@@ -344,7 +344,7 @@ function renderPage(title = 'CFB 27 Offensive Coordinator') {
     <div class="live"><span id="dot" class="dot"></span><span id="liveText">CONNECTING</span></div>
   </div>
   <details class="settingsPanel">
-    <summary>⚙ PLAYBOOKS</summary>
+    <summary>⚙ PLAYBOOK / GAMEPLAN</summary>
     <div class="settingsBody">
       <label for="offenseSelect">Offense</label>
       <select id="offenseSelect"><option value="">Loading…</option></select>
@@ -352,6 +352,12 @@ function renderPage(title = 'CFB 27 Offensive Coordinator') {
       <label for="defenseSelect">Defense</label>
       <select id="defenseSelect"><option value="">Loading…</option></select>
       <div id="defenseStatus" class="settingsStatus"></div>
+      <label for="gameplanSelect">Gameplan</label>
+      <select id="gameplanSelect"><option value="">Loading…</option></select>
+      <div id="gameplanStatus" class="settingsStatus"></div>
+      <label for="aggressivenessInput">Aggressiveness</label>
+      <input id="aggressivenessInput" type="number" min="0" max="100" step="1" value="50" />
+      <div class="settingsStatus">0 = conservative · 100 = aggressive; live telemetry overrides when exposed.</div>
       <div class="settingsActions">
         <button id="savePlaybooks" type="button">Save</button>
         <span id="settingsMessage" class="settingsMessage"></span>
@@ -648,7 +654,7 @@ function render(s) {
       els.defense.hidden = false;
       els.defense.innerHTML = contextHtml;
     }
-    els.detail.innerHTML = detail('WHY', s.coordinatorWhy || s.why);
+    els.detail.innerHTML = detail('GAMEPLAN', s.gameplanName) + detail('PLAN', s.planReason) + detail('WHY', s.coordinatorWhy || s.why);
   } else if (s.phase === 'selected' || s.phase === 'audible') {
     // The user's selection and execution guide are additive state. They must
     // never replace the coordinator's Stage-1 recommendation.
@@ -663,7 +669,8 @@ function render(s) {
     els.detail.className = 'read';
     const guideHtml = renderGuide(s.guide) ||
       detail('READ', Array.isArray(s.read) && s.read.length ? s.read : (s.read || 'No specific adjustment.'));
-    els.detail.innerHTML = detail('WHY', s.coordinatorWhy) + renderPreSnapRecommendation(s.preSnapRecommendation) + guideHtml +
+    els.detail.innerHTML = detail('GAMEPLAN', s.gameplanName) + detail('PLAN', s.planReason) + detail('WHY', s.coordinatorWhy) +
+      renderPreSnapRecommendation(s.preSnapRecommendation) + guideHtml +
       (s.preSnapRecommendation ? '' : renderAudibleRecommendation(s.audibleRecommendation));
   } else if (s.phase === 'defensive_huddle') {
     els.eyebrow.textContent = 'DEFENSIVE CALL';
@@ -722,11 +729,15 @@ const settingsEls = {
   defenseSelect: document.getElementById('defenseSelect'),
   offenseStatus: document.getElementById('offenseStatus'),
   defenseStatus: document.getElementById('defenseStatus'),
+  gameplanSelect: document.getElementById('gameplanSelect'),
+  gameplanStatus: document.getElementById('gameplanStatus'),
+  aggressivenessInput: document.getElementById('aggressivenessInput'),
   saveButton: document.getElementById('savePlaybooks'),
   message: document.getElementById('settingsMessage'),
   audiblePackages: document.getElementById('audiblePackages')
 };
 let playbookLists = { offense: [], defense: [] };
+let gameplanState = { gameplans: [], gameplanId: null, aggressiveness: 50, callSheetSize: 0 };
 let audiblePackageState = { packages: [], gaps: [] };
 
 function describeBook(book) {
@@ -764,16 +775,23 @@ function renderAudiblePackages(data) {
 
 async function loadSettingsPanel() {
   try {
-    const [playbooksRes, configRes, audibleRes] = await Promise.all([
+    const [playbooksRes, configRes, gameplanRes, audibleRes] = await Promise.all([
       fetch('/api/playbooks', { cache: 'no-store' }),
       fetch('/api/config', { cache: 'no-store' }),
+      fetch('/api/gameplans', { cache: 'no-store' }),
       fetch('/api/audibles', { cache: 'no-store' })
     ]);
     playbookLists = playbooksRes.ok ? await playbooksRes.json() : { offense: [], defense: [] };
     const config = configRes.ok ? await configRes.json() : {};
+    gameplanState = gameplanRes.ok ? await gameplanRes.json() : { gameplans: [], gameplanId: null, aggressiveness: 50, callSheetSize: 0 };
     const audibles = audibleRes.ok ? await audibleRes.json() : { packages: [], gaps: [] };
     populateSelect(settingsEls.offenseSelect, playbookLists.offense || [], config.offensePlaybookId, 'Select offensive playbook');
     populateSelect(settingsEls.defenseSelect, playbookLists.defense || [], config.defensePlaybookId, 'Select defensive playbook');
+    populateSelect(settingsEls.gameplanSelect, gameplanState.gameplans || [], gameplanState.gameplanId, 'Select gameplan');
+    settingsEls.aggressivenessInput.value = String(gameplanState.aggressiveness ?? 50);
+    settingsEls.gameplanStatus.textContent = gameplanState.gameplanName
+      ? gameplanState.gameplanName + ' · ' + (gameplanState.callSheetSize || 0) + '-play call sheet'
+      : 'no gameplan prepared';
     updateStatus(settingsEls.offenseStatus, playbookLists.offense || [], config.offensePlaybookId, 'none selected');
     updateStatus(settingsEls.defenseStatus, playbookLists.defense || [], config.defensePlaybookId, 'none selected');
     renderAudiblePackages(audibles);
@@ -814,7 +832,6 @@ settingsEls.saveButton.addEventListener('click', async () => {
   const requests = [];
   if (settingsEls.offenseSelect.value) requests.push(['offense', settingsEls.offenseSelect.value]);
   if (settingsEls.defenseSelect.value) requests.push(['defense', settingsEls.defenseSelect.value]);
-  if (!requests.length) { settingsEls.message.textContent = 'Choose a playbook first.'; return; }
   try {
     const results = [];
     for (const [side, playbookId] of requests) {
@@ -827,6 +844,18 @@ settingsEls.saveButton.addEventListener('click', async () => {
       if (!r.ok) throw new Error(body.error || ('Failed to save ' + side + ' playbook'));
       results.push(body);
     }
+    if (settingsEls.gameplanSelect.value) {
+      const aggression = Math.max(0, Math.min(100, Number(settingsEls.aggressivenessInput.value || 50)));
+      const r = await fetch('/api/gameplans/select', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ gameplanId: settingsEls.gameplanSelect.value, aggressiveness: aggression })
+      });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error || 'Failed to save offensive gameplan');
+      results.push(body);
+    }
+    if (!results.length) { settingsEls.message.textContent = 'Choose a playbook or gameplan first.'; return; }
     const applied = results.some(r => r.appliedImmediately);
     settingsEls.message.textContent = 'Saved' + (applied ? ' — recommendation updated' : ' — applies to next recommendation');
     await loadSettingsPanel();
@@ -888,6 +917,8 @@ class CoordinatorWindow {
       coordinatorCall: null,
       coordinatorFormation: null,
       coordinatorWhy: null,
+      gameplanName: null,
+      planReason: null,
       userCall: null,
       userFormation: null,
       cpuDefense: null,
@@ -902,6 +933,8 @@ class CoordinatorWindow {
       cpuFormation: null,
       read: null,
       guide: null,
+      gameplanName: null,
+      planReason: null,
       audibleRecommendation: null,
       preSnapRecommendation: null,
       result: null,
@@ -955,6 +988,8 @@ class CoordinatorWindow {
         coordinatorCall: null,
         coordinatorFormation: null,
         coordinatorWhy: null,
+        gameplanName: null,
+        planReason: null,
         userCall: null,
         userFormation: null,
         cpuDefense: null,
@@ -983,6 +1018,8 @@ class CoordinatorWindow {
       coordinatorCall: action.play?.name || null,
       coordinatorFormation: action.locator?.formation || action.play?.formation || null,
       coordinatorWhy: action.reasons && action.reasons.length ? action.reasons : (action.reason || null),
+      gameplanName: action.gameplanName || null,
+      planReason: action.planReason || null,
       userCall: null,
       userFormation: null,
       cpuDefense: null,
@@ -1028,6 +1065,8 @@ class CoordinatorWindow {
         coordinatorCall: null,
         coordinatorFormation: null,
         coordinatorWhy: null,
+        gameplanName: null,
+        planReason: null,
         userCall: null,
         userFormation: null,
         cpuDefense: null,
@@ -1056,6 +1095,8 @@ class CoordinatorWindow {
       coordinatorCall: null,
       coordinatorFormation: null,
       coordinatorWhy: null,
+      gameplanName: null,
+      planReason: null,
       userCall: null,
       userFormation: null,
       cpuDefense: null,
@@ -1165,6 +1206,30 @@ class CoordinatorWindow {
       if (req.method === 'GET' && req.url === '/api/config') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store, max-age=0' });
         res.end(JSON.stringify(this.playbookService ? this.playbookService.getConfig() : {}));
+        return;
+      }
+      if (req.method === 'GET' && req.url === '/api/gameplans') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store, max-age=0' });
+        res.end(JSON.stringify(this.playbookService?.listGameplans?.() || { gameplans: [] }));
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/api/gameplans/select') {
+        if (!this.playbookService?.setGameplanSelection) {
+          res.writeHead(503, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'Gameplan selection is not available in this session.' }));
+          return;
+        }
+        readJsonBody(req).then(body => {
+          const result = this.playbookService.setGameplanSelection({
+            gameplanId: body.gameplanId,
+            aggressiveness: body.aggressiveness,
+          });
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(result));
+        }).catch(error => {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: String(error?.message || error) }));
+        });
         return;
       }
       if (req.method === 'GET' && req.url === '/api/audibles') {

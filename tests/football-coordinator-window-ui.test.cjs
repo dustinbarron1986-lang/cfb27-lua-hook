@@ -370,3 +370,29 @@ test('render() shows the unified pre-snap action and Best Bet on the existing ex
   assert.match(html, /#2/);
   assert.match(html, /POSITION_WR — Slant/);
 });
+
+
+test('strategic gameplan and plan explanation render separately from tactical pre-snap advice', () => {
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const state = { quarter: 1, gameClockSeconds: 700, down: 1, distance: 10, yardLine: 25 };
+  coordinatorWindow.showRecommendation({
+    available: true,
+    play: { id: 'gp-1', name: 'Inside Zone', formation: 'Gun Ace' },
+    reasons: ['Situation-valid early-down call'],
+    gameplanName: 'Ground Control',
+    planReason: ['Core Ground Control call.', 'Establish interior run from this formation.'],
+  }, state);
+
+  assert.equal(coordinatorWindow.state.gameplanName, 'Ground Control');
+  assert.deepEqual(coordinatorWindow.state.planReason, ['Core Ground Control call.', 'Establish interior run from this formation.']);
+
+  const { context, elements } = loadClientScript();
+  context.render(coordinatorWindow.state);
+  const html = elements.get('detail').innerHTML;
+  assert.match(html, /GAMEPLAN/);
+  assert.match(html, /Ground Control/);
+  assert.match(html, /PLAN/);
+  assert.match(html, /Core Ground Control call/);
+  assert.match(html, /WHY/);
+  assert.match(html, /Situation-valid early-down call/);
+});

@@ -260,6 +260,9 @@ function decideOracleRecommendation(initialPlay, ranked, threshold = ORACLE_CHAN
 
 function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
   if (!isOffensiveScrimmageSituation(state)) return null;
+  if (Number.isFinite(Number(state?.offensiveAggressiveness))) {
+    engine.updateOffensiveAggressiveness?.(Number(state.offensiveAggressiveness));
+  }
   const situation = situationFromState(state);
   const ranked = engine.recommendPlays({
     playbook: playbooks.offense,
@@ -275,6 +278,9 @@ function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
     }, state);
     return null;
   }
+  const planReasons = top.strategicWhy?.length
+    ? top.strategicWhy
+    : (top.diagnostic?.strategy?.planReasons || []);
   coordinatorWindow.showRecommendation({
     available: true,
     play: top.play,
@@ -282,6 +288,8 @@ function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
       formation: top.play.formation,
     },
     reasons: top.reasons?.slice(0, 3) || [],
+    gameplanName: ranked.gameplan?.gameplanName || null,
+    planReason: planReasons.slice(0, 2),
   }, state);
   engine.recordRecommendation?.('offense', top, {
     opponentPlay: null,
@@ -290,6 +298,10 @@ function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
   });
   io.log(`\n[OC] ${downText(state.down)} & ${state.distance} | Q${state.quarter} ${fmtClock(state.gameClockSeconds)}`);
   io.log(`[OC] CALL: ${top.play.formation || '?'} / ${top.play.name || top.play.id}  score=${top.score}`);
+  if (ranked.gameplan?.gameplanName) {
+    io.log(`[OC] GAMEPLAN: ${ranked.gameplan.gameplanName} | callSheet=${ranked.gameplan.callSheetSize} | aggression=${ranked.gameplan.aggressiveness}`);
+  }
+  if (planReasons.length) io.log(`[OC] PLAN: ${planReasons.slice(0, 2).join(' | ')}`);
   if (top.reasons?.length) io.log(`[OC] WHY: ${top.reasons.slice(0, 3).join(' | ')}`);
   if (ranked.tendency?.attempts) {
     io.log(`[OC] TENDENCY: ${ranked.tendency.scope}, n=${ranked.tendency.attempts}, confidence=${ranked.tendency.confidence}`);
@@ -788,6 +800,27 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
     };
   }
 
+  function listGameplans() {
+    return {
+      ...(engine.gameplanSummary?.() || {}),
+      gameplans: engine.listGameplans?.() || [],
+    };
+  }
+
+  function setGameplanSelection({ gameplanId, aggressiveness }) {
+    const result = engine.setGameplanSelection?.(playbooks.offense, { gameplanId, aggressiveness });
+    if (!result?.available) throw new Error(result?.reason || 'Gameplan selection is unavailable.');
+    io.log(`[GAMEPLAN] ${result.gameplanName} | callSheet=${result.callSheetSize} | aggression=${result.aggressiveness}`);
+
+    let appliedImmediately = false;
+    const lastKnownState = getLastKnownState();
+    if (lastKnownState && isOffensiveScrimmageSituation(lastKnownState)) {
+      printRecommendation(engine, playbooks, lastKnownState, io, coordinatorWindow);
+      appliedImmediately = true;
+    }
+    return { ...result, appliedImmediately };
+  }
+
   function listAudiblePackages() {
     return engine.listAudiblePackages?.(playbooks.offense) || { packages: [], gaps: [] };
   }
@@ -831,7 +864,10 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
     // simply becomes authoritative for every subsequent tick that reads
     // playbooks.offense/playbooks.defense.
     playbooks[side] = newBook;
-    if (side === 'offense') engine.prepareAudiblePackages?.(newBook);
+    if (side === 'offense') {
+      engine.prepareAudiblePackages?.(newBook);
+      engine.prepareGameplan?.(newBook);
+    }
     io.log(playbookLogLine(side === 'offense' ? 'Offense' : 'Defense', newBook));
 
     let appliedImmediately = false;
@@ -855,7 +891,15 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
     return { book: { id: newBook.id, name: newBook.name, playCount: newBook.plays.length }, appliedImmediately };
   }
 
-  return { listPlaybooks, getConfig, setPlaybookSelection, listAudiblePackages, confirmAudiblePackage };
+  return {
+    listPlaybooks,
+    getConfig,
+    setPlaybookSelection,
+    listGameplans,
+    setGameplanSelection,
+    listAudiblePackages,
+    confirmAudiblePackage,
+  };
 }
 
 async function runLiveCoordinator({ repoRoot, configPath, signal, io = console } = {}) {
@@ -878,8 +922,10 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   const engine = new FootballEngine({
     executionAdvisor: { eaPlayKnowledgeStore: authoritativePlayStore },
     audiblePackagePath: path.resolve(root, 'data/coordinator-audibles.json'),
+    gameplanPath: path.resolve(root, 'data/coordinator-gameplans.json'),
   });
   const audiblePreparation = engine.prepareAudiblePackages(playbooks.offense);
+  const gameplanPreparation = engine.prepareGameplan(playbooks.offense);
   const reducer = new SnapReducer();
   let lastSituationKey = null;
   let lastExecutionKey = null;
@@ -933,6 +979,9 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
     io.log(playbookLogLine('Defense', playbooks.defense));
     const confirmedAudibles = audiblePreparation.packages.filter(pkg => pkg.confirmed).length;
     io.log(`[AUDIBLES] prepared=${audiblePreparation.packages.length} formation packages confirmed=${confirmedAudibles}${audiblePreparation.gaps.length ? ` gaps=${audiblePreparation.gaps.length}` : ''}`);
+    if (gameplanPreparation?.available) {
+      io.log(`[GAMEPLAN] ${gameplanPreparation.gameplanName} | callSheet=${gameplanPreparation.callSheetSize} | aggression=${gameplanPreparation.aggressiveness} | ${gameplanPreparation.reused ? 'reused' : 'generated'}`);
+    }
     io.log('[COORD] Waiting for live coord.state telemetry...');
 
     for await (const event of sdk.followEvents(client, { after, pollMs: config.pollMs || 250, signal })) {
@@ -1051,6 +1100,10 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
       }
     }
   } finally {
+    const gameplanReview = engine.reviewGameplan?.() || [];
+    for (const row of gameplanReview) {
+      io.log(`[GAMEPLAN REVIEW] ${row.status} | ${row.formation || '?'}${row.play ? ' / ' + row.play : ''} | ${row.reason}`);
+    }
     const audibleReview = engine.reviewAudiblePackages?.(playbooks.offense) || [];
     for (const row of audibleReview) {
       const replacement = row.proposedReplacement ? ` -> ${row.proposedReplacement.playName}` : '';

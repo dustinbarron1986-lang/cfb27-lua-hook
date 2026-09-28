@@ -9,6 +9,7 @@ const { DefensiveSelectionEngine } = require("./recommendation/defensive-selecti
 const { KnowledgeEngine } = require("./knowledge/knowledge-engine");
 const { classifyOffensiveStructure, classifyDefensiveStructure } = require("./analysis/structural-threat-model");
 const { AudiblePackageStore } = require("./recommendation/audible-package-store");
+const { GameplanEngine } = require("./gameplan/gameplan-engine");
 
 let DatabasePlaybookRepository = null;
 try {
@@ -29,6 +30,11 @@ class FootballEngine {
     this.audiblePackages = options.audiblePackageStore || new AudiblePackageStore({
       filePath: options.audiblePackagePath || null,
     });
+    this.gameplans = options.gameplanEngine || new GameplanEngine({
+      filePath: options.gameplanPath || null,
+      audiblePackageStore: this.audiblePackages,
+      targetSize: options.callSheetTargetSize || 80,
+    });
     this.sequences = new SequenceMemory(this.performance);
     this.knowledge = options.knowledge || new KnowledgeEngine(options.knowledgeOptions || {});
     this.recommendationHistory = options.recommendationHistory || new RecommendationHistory();
@@ -38,7 +44,8 @@ class FootballEngine {
       sequences: this.sequences,
       tendencies: this.tendencies,
       knowledge: this.knowledge,
-      recommendationHistory: this.recommendationHistory
+      recommendationHistory: this.recommendationHistory,
+      strategy: this.gameplans
     });
 
     this.executionAdvisor = new ExecutionAdvisor({
@@ -83,6 +90,7 @@ class FootballEngine {
       defense: gradeDefensivePlay(enriched)
     };
     this.performance.record(enriched);
+    this.gameplans.record(enriched);
     return enriched;
   }
 
@@ -136,16 +144,25 @@ class FootballEngine {
   }
 
   recommendPlays({ playbook, defensePlay = null, situation, limit = 5 }) {
-    // ORACLE/OMNISCIENT mode: the exact CPU defensive call may define the
-    // structural counter envelope. Missing defense data degrades to the
-    // previous pre-call model rather than fabricating opponent structure.
+    // The gameplan/call-sheet layer exists ABOVE the exact-defense Oracle.
+    // Stage 1 (defense unknown) scopes the candidate pool to the active call
+    // sheet + current situation. Oracle receives the already-called play and
+    // its confirmed audible package, so it must not be re-scoped here.
     const normalizedDefense = defensePlay ? this._withObservedFamily(defensePlay, "defense") : null;
-    return this.playSelection.rank({
-      playbook,
+    const scoped = normalizedDefense
+      ? { playbook, meta: { applied: false, reason: "Exact-defense downstream stage." } }
+      : this.gameplans.scopePlaybook(playbook, situation);
+    const ranked = this.playSelection.rank({
+      playbook: scoped.playbook,
       defensePlay: normalizedDefense,
       situation,
       limit
     });
+    return {
+      ...ranked,
+      gameplan: scoped.meta?.applied ? this.gameplans.summary() : null,
+      callSheet: scoped.meta || null,
+    };
   }
 
   recommendDefenses({ playbook, offensePlay, situation, limit = 5 }) {
@@ -165,6 +182,38 @@ class FootballEngine {
       situation,
       limit
     });
+  }
+
+  prepareGameplan(playbook, options = {}) {
+    return this.gameplans.prepare(playbook, options);
+  }
+
+  listGameplans() {
+    return this.gameplans.listGameplans();
+  }
+
+  setGameplanSelection(playbook, options = {}) {
+    return this.gameplans.setSelection(playbook, options);
+  }
+
+  updateOffensiveAggressiveness(value) {
+    return this.gameplans.updateAggressiveness(value);
+  }
+
+  gameplanSummary() {
+    return this.gameplans.summary();
+  }
+
+  getCallSheet(playbook = null) {
+    return this.gameplans.getCallSheet(playbook);
+  }
+
+  resetGameplanSession() {
+    return this.gameplans.resetSession();
+  }
+
+  reviewGameplan(options = {}) {
+    return this.gameplans.review({ performanceStore: this.performance, ...options });
   }
 
   prepareAudiblePackages(playbook) {

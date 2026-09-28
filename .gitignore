@@ -36,6 +36,7 @@ data/coordinator.db-wal
 data/coordinator.db-shm
 data/coordinator-config.json
 data/coordinator-audibles.json
+data/coordinator-gameplans.json
 .vscode/
 
 # Generated locally from the private/raw EA Frostbite assignment XML corpus.
