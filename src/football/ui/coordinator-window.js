@@ -307,7 +307,18 @@ function renderPage(title = 'CFB 27 Offensive Coordinator') {
     padding: 6px 14px; font-weight: 800; font-size: 12px; cursor: pointer;
   }
   .settingsMessage { font-size: 11.5px; color: var(--muted); }
-  .audiblePackages { grid-column: 1 / -1; display: grid; gap: 8px; margin-top: 4px; }
+  .audiblePackages {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 8px;
+    margin-top: 4px;
+    max-height: min(52vh, 560px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding-right: 4px;
+    align-content: start;
+  }
   .audiblePackage { border: 1px solid rgba(255,255,255,.10); border-radius: 8px; padding: 8px 10px; background: rgba(255,255,255,.025); }
   .audiblePackageHead { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 11.5px; font-weight: 800; }
   .audibleSlots { margin-top: 5px; font-size: 11px; color: var(--muted); line-height: 1.45; }
