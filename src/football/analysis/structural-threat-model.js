@@ -88,7 +88,7 @@ function classifyOffensiveStructure(play = {}, authoritative = null) {
   signal('perimeter_run', /\boutside zone\b|\bwide zone\b|\bstretch\b|\btoss\b|\bsweep\b|\bjet\b|\bend around\b/, 1.1);
   signal('qb_run_option', /\bread option\b|\bzone read\b|\bveer\b|\bpower read\b|\bspeed option\b|\bqb (draw|power|counter)\b/, 1.15);
   signal('screen', /\bscreen\b|\bbubble\b|\btunnel\b|\bmiddle screen\b/, 1.1);
-  signal('quick_horizontal', /\bslant\b|\bstick\b|\bspacing\b|\bquick\b|\bbubble\b|\bflat\b|\bsmoke\b|\bspeed out\b/, 0.95);
+  signal('quick_horizontal', /\bslants?\b|\bstick\b|\bspacing\b|\bquick\b|\bbubble\b|\bflat\b|\bsmoke\b|\bspeed out\b/, 0.95);
   signal('crossing', /\bmesh\b|\bshallow\b|\bdrive\b|\bcross\b|\bdrag\b/, 1.05);
   signal('flood', /\bflood\b|\bsail\b/, 1.05);
   signal('intermediate_middle', /\bdig\b|\bseam\b|\blevels\b|\bmiddle\b|\bpost\b/, 0.85);

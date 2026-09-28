@@ -334,7 +334,7 @@ function advisePreSnapCoordinator({
   }
 
   const protector = pressure ? protectors[0] || null : null;
-  if (protector && pressure && baseGrade.fit >= 0.10) {
+  if (protector && pressure && baseGrade.counter?.gate?.valid !== false && baseGrade.fit >= 0.08) {
     const protectedIndexes = new Set([Number(protector.playerIndex)]);
     return makeResult({
       action: {
