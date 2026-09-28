@@ -483,7 +483,7 @@ function assignmentRoute(receiver) {
 }
 function receiverButton(receiver) {
   const [x,y] = receiverPoint(receiver);
-  const label = esc(receiver.button || '?');
+  const label = esc(receiver.readMarker || receiver.button || '?');
   return '<circle class="targetButton" cx="'+x+'" cy="'+y+'" r="12"/><text class="targetButtonText" x="'+x+'" y="'+y+'">'+label+'</text>';
 }
 function partialAssignmentDiagram(guide) {

@@ -71,7 +71,17 @@ function deriveRouteGeometry(record) {
       continue;
     }
     if (action.opcode === 'ID_RECCUT' || action.type === 'ReceiverCutAssignment') {
-      events.push({ order: action.order, type: 'cut', x, y, direction: f.direction || null, cutType: f.cutType || null });
+      events.push({
+        order: action.order,
+        type: 'cut',
+        x,
+        y,
+        direction: f.direction || null,
+        cutType: f.cutType || null,
+        distanceAtCut: Number(totalDistance.toFixed(3)),
+        movementCostAtCut: Number(movementCost.toFixed(3)),
+        delayUnitsAtCut: Number(delayUnits.toFixed(3)),
+      });
       continue;
     }
     if (action.opcode === 'ID_DELAY' || action.type === 'DelayAssignment') {

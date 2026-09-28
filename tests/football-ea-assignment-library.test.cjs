@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 
 const { parseAssignmentXml } = require('../src/football/assignments/ea-assignment-parser');
-const { deriveAssignmentSemantics } = require('../src/football/assignments/assignment-semantics');
+const { deriveAssignmentSemantics, deriveRouteGeometry, directionVector } = require('../src/football/assignments/assignment-semantics');
 const { EaAssignmentStore } = require('../src/football/assignments/ea-assignment-store');
 const { buildAssignmentIndex } = require('../scripts/build-ea-assignment-index.cjs');
 const { buildPassingPlayArt } = require('../src/football/analysis/play-art-engine');
@@ -172,4 +172,31 @@ test('PlayKnowledgeStore refuses the legacy flattened assignment-id namespace', 
   assert.equal(resolved.eaAssignmentResolvedCount, 0);
   assert.equal(resolved.receiverButtons[0].eaAssignmentStatus, 'legacy_id_not_resolved');
   assert.equal(resolved.receiverButtons[0].eaAssignment, undefined);
+});
+
+test('receiver cut events snapshot cumulative distance, movement cost, and delay evidence', () => {
+  const route = deriveRouteGeometry({
+    routeType: 'AssignRouteType_RR_Whip',
+    actions: [
+      { order: 0, opcode: 'ID_DELAY', fields: { time: 0.25 } },
+      { order: 1, opcode: 'ID_RUNROUTE', fields: { distance: 4, direction: 90, speed: 50 } },
+      { order: 2, opcode: 'ID_RECCUT', fields: { direction: 'RECEIVER_CUT_DIR_LEFT', cutType: 'RECEIVER_CUT_ANGLE_45' } },
+      { order: 3, opcode: 'ID_RUNROUTE', fields: { distance: 2, direction: 135, speed: 100 } },
+      { order: 4, opcode: 'ID_RECCUT', fields: { direction: 'RECEIVER_CUT_DIR_RIGHT', cutType: 'RECEIVER_CUT_ANGLE_90' } },
+      { order: 5, opcode: 'ID_RUNROUTE', fields: { distance: 3, direction: 0, speed: 100 } },
+    ],
+  });
+  const cuts = route.events.filter(event => event.type === 'cut');
+  assert.deepEqual(cuts.map(cut => [cut.distanceAtCut, cut.movementCostAtCut, cut.delayUnitsAtCut]), [[4, 8, 0.25], [6, 10, 0.25]]);
+});
+
+test('validated EA route direction convention remains 0 right, 90 upfield, 60 right-upfield, 120 left-upfield', () => {
+  const zero = directionVector(0, 10);
+  const ninety = directionVector(90, 10);
+  const sixty = directionVector(60, 10);
+  const oneTwenty = directionVector(120, 10);
+  assert.ok(zero.dx > 9.9 && Math.abs(zero.dy) < 0.001);
+  assert.ok(Math.abs(ninety.dx) < 0.001 && ninety.dy > 9.9);
+  assert.ok(sixty.dx > 0 && sixty.dy > 0);
+  assert.ok(oneTwenty.dx < 0 && oneTwenty.dy > 0);
 });

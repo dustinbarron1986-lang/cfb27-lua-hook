@@ -15,6 +15,7 @@ const {
   authorityDiagnosticKey,
   formatAuthorityDiagnostic,
   logAuthorityTransition,
+  printExecutionAdvice,
 } = require('../src/coordinator/live-coordinator.cjs');
 
 function artifact(entries) {
@@ -375,4 +376,35 @@ test('EA authority diagnostic reports failure reasons and deduplicates without a
 
   assert.notEqual(authorityDiagnosticKey(unresolved, liveA), authorityDiagnosticKey(notFound, liveA));
   assert.match(formatAuthorityDiagnostic({ status: 'unavailable', reason: 'artifact_missing' }, liveA), /reason=artifact_missing/);
+});
+
+test('PowerShell READ diagnostics prefer actionable authoritative guide over known legacy advice', () => {
+  const logs = [];
+  const io = { log: line => logs.push(line) };
+  const coordinatorWindow = { showSelection() {} };
+  const playbooks = { offense: { plays: [{ id: 'live-off', name: 'PA Sail X Post', formation: 'Wing Slot', concepts: ['legacy_sail'] }] } };
+  const state = {
+    possession: 0, down: 1, fieldX: 25,
+    offensiveCallAvailable: true, offensiveSet: 'Wing Slot', offensivePlay: 'PA Sail X Post', offensivePlayId: 'live-off',
+    defensiveCallAvailable: true, defensiveSet: 'Nickel', defensivePlay: 'Cover 3 Sky', defensivePlayId: 'live-def',
+  };
+  const engine = { adviseExecution() {
+    return {
+      available: true, authority: { available: true },
+      advice: { known: true, headline: 'LEGACY HEADLINE SHOULD NOT WIN',
+        coaching: { preSnap: ['Choose/confirm the concept side.'], postSnap: ['Common teaching is deep-to-intermediate-to-short.'] } },
+      guide: { mode: 'pass', progressionStatus: 'derived',
+        reads: [{ number: '1', label: 'Flat', detail: 'KEY: curl-flat defender. WINDOW: quick. THROW: immediately after release.' }] },
+    };
+  } };
+
+  printExecutionAdvice(engine, playbooks, state, null, { offense: true, defense: true }, io, coordinatorWindow,
+    { status: 'resolved', playKey: 'play:test' });
+
+  const authoritativeIndex = logs.findIndex(line => /DERIVED_STRUCTURAL/.test(line));
+  const readIndex = logs.findIndex(line => /1: Flat/.test(line));
+  const legacyIndex = logs.findIndex(line => /LEGACY HEADLINE SHOULD NOT WIN/.test(line));
+  assert.ok(authoritativeIndex >= 0);
+  assert.ok(readIndex > authoritativeIndex);
+  assert.equal(legacyIndex, -1);
 });

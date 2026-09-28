@@ -11,7 +11,7 @@ const {
   authoritativeReceiverRows,
 } = require('../src/football/analysis/authoritative-play-structure');
 const { analyzeRunAssignments } = require('../src/football/analysis/run-gap-engine');
-const { deriveStructuralProgression } = require('../src/football/analysis/passing-progression-engine');
+const { deriveStructuralProgression, routeTraits } = require('../src/football/analysis/passing-progression-engine');
 const { FootballEngine } = require('../src/football/engine');
 
 function routeAssignment(id, name, family, points, extra = {}) {
@@ -25,13 +25,13 @@ function routeAssignment(id, name, family, points, extra = {}) {
       route: {
         routeFamily: family,
         points,
-        segments: [],
-        events: [],
+        segments: extra.segments || [],
+        events: extra.events || [],
         motion: extra.motion || [],
-        optionRoutes: [],
+        optionRoutes: extra.optionRoutes || [],
         totalDistance: 10,
         movementCost: extra.movementCost ?? 8,
-        delayUnits: 0,
+        delayUnits: extra.delayUnits ?? 0,
         maxDepth: extra.maxDepth ?? 8,
       },
       blocking: extra.blocking || null,
@@ -235,4 +235,96 @@ test('authoritative receiver adaptation never invents controller buttons', () =>
   const rows = authoritativeReceiverRows(buildAuthoritativePlayStructure(expanded));
   assert.equal(rows.length, 1);
   assert.equal(rows[0].button, null);
+});
+
+function progressionTarget({ id, startX, family, routeType, maxDepth, movementCost, events = [], segments = [], optionRoutes = [] }) {
+  return {
+    button: null, playerIndex: id, playerLabel: `P${id}`, startX,
+    assignmentId: id, assignmentName: family,
+    routeType: routeType || `AssignRouteType_RR_${family}`, routeFamily: family,
+    geometry: { start: { x: startX, y: 0 }, routeFamily: family, points: [{ x: startX, y: 0 }],
+      events, segments, optionRoutes, maxDepth, movementCost, delayUnits: 0 },
+  };
+}
+
+test('Post/Corner human labels use primary-break field position and post-cut geometry while preserving raw EA route type', () => {
+  const post = progressionTarget({
+    id: 21, startX: 12, family: 'post_deep', routeType: 'AssignRouteType_RR_Post_Deep', maxDepth: 24, movementCost: 30,
+    events: [{ order: 1, type: 'cut', x: 0, y: 12, movementCostAtCut: 12, distanceAtCut: 12, delayUnitsAtCut: 0 }],
+    segments: [{ order: 0, from: { x: 12, y: 0 }, to: { x: 12, y: 12 }, distance: 12, speed: 100 },
+      { order: 2, from: { x: 12, y: 12 }, to: { x: 5, y: 24 }, distance: 14, speed: 100 }],
+  });
+  const corner = progressionTarget({
+    id: 22, startX: 12, family: 'post_deep', routeType: 'AssignRouteType_RR_Post_Deep', maxDepth: 24, movementCost: 30,
+    events: [{ order: 1, type: 'cut', x: 0, y: 12, movementCostAtCut: 12, distanceAtCut: 12, delayUnitsAtCut: 0 }],
+    segments: [{ order: 0, from: { x: 12, y: 0 }, to: { x: 12, y: 12 }, distance: 12, speed: 100 },
+      { order: 2, from: { x: 12, y: 12 }, to: { x: 21, y: 24 }, distance: 15, speed: 100 }],
+  });
+  const postTraits = routeTraits(post);
+  const cornerTraits = routeTraits(corner);
+  assert.equal(postTraits.derivedFootballRoute, 'Post');
+  assert.equal(cornerTraits.derivedFootballRoute, 'Corner');
+  assert.equal(postTraits.rawEaRouteType, 'AssignRouteType_RR_Post_Deep');
+  assert.equal(cornerTraits.rawEaRouteType, 'AssignRouteType_RR_Post_Deep');
+});
+
+test('multi-cut deterministic route matures at final meaningful authored cut, not the setup cut', () => {
+  const whip = progressionTarget({
+    id: 31, startX: 10, family: 'whip', maxDepth: 8, movementCost: 20,
+    events: [
+      { order: 1, type: 'cut', x: 0, y: 3, movementCostAtCut: 3, distanceAtCut: 3, delayUnitsAtCut: 0 },
+      { order: 3, type: 'cut', x: -2, y: 6, movementCostAtCut: 8, distanceAtCut: 7, delayUnitsAtCut: 0 },
+    ],
+    segments: [{ order: 0, from: { x: 10, y: 0 }, to: { x: 10, y: 3 }, distance: 3, speed: 100 },
+      { order: 2, from: { x: 10, y: 3 }, to: { x: 8, y: 6 }, distance: 4, speed: 100 },
+      { order: 4, from: { x: 8, y: 6 }, to: { x: 13, y: 6 }, distance: 5, speed: 100 }],
+  });
+  const traits = routeTraits(whip);
+  assert.equal(traits.maturity.primaryBreak.order, 3);
+  assert.equal(traits.maturity.source, 'final_meaningful_authored_cut');
+  assert.equal(traits.maturity.bucket, 'early');
+});
+
+test('flat maturity ignores long whole-route cost while vertical maturity uses depth when no meaningful cut exists', () => {
+  const flat = progressionTarget({ id: 41, startX: 8, family: 'flat_rt', maxDepth: 2, movementCost: 22,
+    segments: [{ order: 0, from: { x: 8, y: 0 }, to: { x: 25, y: 2 }, distance: 17.5, speed: 85 }] });
+  const vertical = progressionTarget({ id: 42, startX: -8, family: 'vertical', maxDepth: 20, movementCost: 20,
+    segments: [{ order: 0, from: { x: -8, y: 0 }, to: { x: -8, y: 20 }, distance: 20, speed: 100 }] });
+  assert.ok(['immediate', 'quick'].includes(routeTraits(flat).maturity.bucket));
+  assert.equal(routeTraits(flat).maturity.source, 'release_shallow_window');
+  assert.equal(routeTraits(vertical).maturity.bucket, 'late');
+  assert.equal(routeTraits(vertical).maturity.source, 'depth_window');
+});
+
+test('option-route maturity stays ambiguous instead of forcing a final-cut interpretation', () => {
+  const option = progressionTarget({
+    id: 51, startX: 8, family: 'choice', maxDepth: 10, movementCost: 10,
+    optionRoutes: [{ order: 2, asset: 'branch/a' }, { order: 2, asset: 'branch/b' }],
+    events: [{ order: 1, type: 'cut', x: 0, y: 5, movementCostAtCut: 5, distanceAtCut: 5, delayUnitsAtCut: 0 },
+      { order: 2, type: 'option_route', x: 0, y: 5, branches: [] }],
+    segments: [{ order: 0, from: { x: 8, y: 0 }, to: { x: 8, y: 5 }, distance: 5, speed: 100 }],
+  });
+  const traits = routeTraits(option);
+  assert.equal(traits.maturity.ambiguous, true);
+  assert.equal(traits.maturity.bucket, 'ambiguous');
+});
+
+test('derived progression exposes relative WINDOW/THROW coaching and exact route identity without controller buttons', () => {
+  const flat = progressionTarget({ id: 61, startX: 10, family: 'flat', maxDepth: 3, movementCost: 18,
+    segments: [{ order: 0, from: { x: 10, y: 0 }, to: { x: 18, y: 3 }, distance: 9, speed: 100 }] });
+  const dig = progressionTarget({
+    id: 62, startX: 14, family: 'dig', maxDepth: 12, movementCost: 25,
+    events: [{ order: 1, type: 'cut', x: 0, y: 10, movementCostAtCut: 10, distanceAtCut: 10, delayUnitsAtCut: 0 }],
+    segments: [{ order: 0, from: { x: 14, y: 0 }, to: { x: 14, y: 10 }, distance: 10, speed: 100 },
+      { order: 2, from: { x: 14, y: 10 }, to: { x: 2, y: 10 }, distance: 12, speed: 100 }],
+  });
+  const result = deriveStructuralProgression({ playArt: { targets: [flat, dig] } });
+  const digRead = result.reads.find(read => read.assignmentId === 62);
+  assert.ok(digRead);
+  assert.equal(digRead.playerIndex, 62);
+  assert.equal(digRead.button, null);
+  assert.equal(digRead.timing, 'intermediate');
+  assert.match(digRead.detail, /WINDOW: intermediate/i);
+  assert.match(digRead.detail, /THROW: anticipate the final inside break/i);
+  assert.match(result.warning, /not an EA-authored progression/i);
 });

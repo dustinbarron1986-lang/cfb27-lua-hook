@@ -212,3 +212,13 @@ test('a live defensive recommendation for an unverified book never surfaces a ra
     database.close();
   }
 });
+
+test('authoritative assignment diagram uses derived readMarker without inventing a controller button', () => {
+  const { context } = loadClientScript();
+  const receiver = { button: null, readMarker: '2', x: 10, y: 0,
+    assignmentGeometry: { points: [{ x: 0, y: 0 }, { x: 0, y: 8 }, { x: -8, y: 8 }] } };
+  const svg = context.partialAssignmentDiagram({ receivers: [receiver] });
+  assert.match(svg, />2<\/text>/);
+  assert.doesNotMatch(svg, />\?<\/text>/);
+  assert.equal(receiver.button, null);
+});

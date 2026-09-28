@@ -354,6 +354,10 @@ function receiverKnowledge(playKnowledge) {
       : fallback?.label || null;
     return {
       button: receiver.button,
+      readMarker: receiver.readMarker || null,
+      playerIndex: receiver.playerIndex ?? null,
+      playerLabel: receiver.playerLabel || null,
+      assignmentId: ea?.positionAssignId ?? receiver.assignmentId ?? null,
       x: receiver.x,
       y: receiver.y,
       assignment: receiver.assignment,
@@ -390,7 +394,14 @@ function derivedProgression(playKnowledge) {
     detail: read.detail || '',
     timing: read.timing || null,
     assignmentId: read.assignmentId ?? null,
-    assignmentName: read.assignmentName || null
+    assignmentName: read.assignmentName || null,
+    playerIndex: read.playerIndex ?? null,
+    playerLabel: read.playerLabel || null,
+    rawEaRouteType: read.rawEaRouteType || null,
+    derivedFootballRoute: read.derivedFootballRoute || null,
+    maturitySource: read.maturitySource || null,
+    maturityAmbiguous: Boolean(read.maturityAmbiguous),
+    primaryBreakOrder: read.primaryBreakOrder ?? null
   }));
 
   if (reads.length && derived.keyDefenderRole) {
@@ -407,7 +418,9 @@ function derivedProgression(playKnowledge) {
       detail: 'Alert only when leverage clearly gives it; this classification is coordinator-derived from the EA-authored route structure.',
       timing: null,
       assignmentId: derived.alert.assignmentId ?? null,
-      assignmentName: null
+      assignmentName: derived.alert.assignmentName || null,
+      playerIndex: derived.alert.playerIndex ?? null,
+      playerLabel: derived.alert.playerLabel || null
     });
   }
   if (derived.outlet && !reads.some(read => read.assignmentId != null && read.assignmentId === derived.outlet.assignmentId)) {
@@ -418,11 +431,46 @@ function derivedProgression(playKnowledge) {
       detail: 'Outlet/checkdown derived from the underneath EA-authored route structure.',
       timing: null,
       assignmentId: derived.outlet.assignmentId ?? null,
-      assignmentName: null
+      assignmentName: derived.outlet.assignmentName || null,
+      playerIndex: derived.outlet.playerIndex ?? null,
+      playerLabel: derived.outlet.playerLabel || null
     });
   }
 
   return { ...derived, reads };
+}
+
+function sameAuthoritativeReadIdentity(receiver, read) {
+  const receiverPlayer = Number(receiver?.playerIndex);
+  const readPlayer = Number(read?.playerIndex);
+  const playerComparable = Number.isFinite(receiverPlayer) && Number.isFinite(readPlayer);
+  if (playerComparable && receiverPlayer !== readPlayer) return false;
+  const receiverAssignment = receiver?.assignmentId;
+  const readAssignment = read?.assignmentId;
+  const assignmentComparable = receiverAssignment != null && readAssignment != null;
+  if (assignmentComparable && String(receiverAssignment) !== String(readAssignment)) return false;
+  return (playerComparable && receiverPlayer === readPlayer) ||
+    (assignmentComparable && String(receiverAssignment) === String(readAssignment));
+}
+
+function displayMarkerForRead(read) {
+  if (read?.number === 'ALERT') return 'A';
+  if (read?.number === 'OUT') return 'O';
+  return read?.number ? String(read.number) : null;
+}
+
+function applyDerivedReadMarkers(receivers, reads) {
+  const rows = (receivers || []).map(receiver => ({ ...receiver }));
+  for (const read of reads || []) {
+    const marker = displayMarkerForRead(read);
+    if (!marker) continue;
+    const candidates = rows.filter(receiver => sameAuthoritativeReadIdentity(receiver, read));
+    if (candidates.length !== 1) continue;
+    const receiver = candidates[0];
+    const numeric = /^\d+$/.test(marker);
+    if (!receiver.readMarker || numeric) receiver.readMarker = marker;
+  }
+  return rows;
 }
 
 function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge } = {}) {
@@ -501,6 +549,7 @@ function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge }
   }
 
   if (derivedReads) {
+    const markedReceivers = applyDerivedReadMarkers(receivers, derivedReads.reads);
     return {
       mode: type,
       concept: concept || null,
@@ -509,7 +558,7 @@ function buildNoviceGuide({ selectedPlay, advice, defensiveCall, playKnowledge }
       diagramLabel: 'EA ASSIGNMENT VIEW — DERIVED READS',
       reads: derivedReads.reads,
       paths: [],
-      receivers,
+      receivers: markedReceivers,
       coverageNote: note,
       progressionStatus: 'derived',
       routeStatus: 'ea_assignment_geometry',

@@ -283,8 +283,26 @@ function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coor
   }, result, state);
 
   io.log(`\n[READ] ${offenseCall.set || '?'} / ${offenseCall.name} vs ${defenseCall.set || '?'} / ${defenseCall.name}`);
+  const authoritativeGuide = Boolean(
+    result.authority?.available &&
+    result.guide?.progressionStatus === 'derived' &&
+    (result.guide.mode === 'run'
+      ? (result.guide.headline || result.guide.watch || result.guide.steps?.length)
+      : result.guide.reads?.length)
+  );
+
   if (!result.available) {
     io.log(`[READ] No detailed execution guidance yet (${result.reason || 'play not mapped to available guidance'}).`);
+  } else if (authoritativeGuide && result.guide?.mode === 'run') {
+    io.log('[READ] Authoritative EA assignment structure available; run guidance is DERIVED_STRUCTURAL.');
+    io.log(`[READ] ${result.guide.headline || 'Authoritative run structure available.'}`);
+    if (result.guide.watch) io.log(`[READ] KEY: ${result.guide.watch}`);
+    if (result.guide.steps?.[0]) io.log(`[READ] CUT: ${result.guide.steps[0]}`);
+  } else if (authoritativeGuide && result.guide?.reads?.length) {
+    io.log('[READ] Authoritative EA assignment structure available; read order is DERIVED_STRUCTURAL.');
+    for (const read of result.guide.reads) {
+      io.log(`[READ] ${read.number || 'READ'}: ${read.label || 'Read'}${read.detail ? ` — ${read.detail}` : ''}`);
+    }
   } else if (result.advice?.known) {
     const advice = result.advice;
     io.log(`[READ] ${advice.headline}${advice.pressureDetected ? ' | PRESSURE' : ''}`);
@@ -293,16 +311,11 @@ function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coor
     if (pre) io.log(`[READ] KEY: ${pre}`);
     if (post) io.log(`[READ] AFTER SNAP: ${post}`);
   } else if (result.guide?.mode === 'run') {
-    io.log(`[READ] ${result.guide.headline || 'Authoritative run structure available.'}`);
+    io.log(`[READ] ${result.guide.headline || 'Run guidance available.'}`);
     if (result.guide.watch) io.log(`[READ] KEY: ${result.guide.watch}`);
     if (result.guide.steps?.[0]) io.log(`[READ] CUT: ${result.guide.steps[0]}`);
   } else if (result.guide?.reads?.length) {
-    io.log('[READ] Authoritative EA assignment structure available; read order is DERIVED_STRUCTURAL.');
-    const first = result.guide.reads[0];
-    if (first?.detail) io.log(`[READ] ${first.number || '1'}: ${first.label || 'Read'} — ${first.detail}`);
-    for (const extra of result.guide.reads.filter(read => read.number === 'ALERT' || read.number === 'OUT')) {
-      io.log(`[READ] ${extra.number}: ${extra.label} — ${extra.detail}`);
-    }
+    for (const read of result.guide.reads) io.log(`[READ] ${read.number || 'READ'}: ${read.label || 'Read'}${read.detail ? ` — ${read.detail}` : ''}`);
   }
   return key;
 }
