@@ -584,7 +584,7 @@ test('defensive family repetition is a modest predictability penalty across diff
   const cover3 = ranked.recommendations.find(r => r.play.id === 'fresh-cover-3');
   assert.ok(cover3);
   assert.ok(Math.abs(cover3.components.familyRepetition - (-0.54)) < 1e-9);
-  assert.equal(cover3.components.repetition, 0);
+  assert.ok(cover3.components.repetition === 0);
   assert.equal(ranked.recommendations[0].play.id, 'fresh-quarters');
 });
 
