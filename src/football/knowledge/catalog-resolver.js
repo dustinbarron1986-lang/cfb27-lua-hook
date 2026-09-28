@@ -91,7 +91,7 @@ class CatalogResolver {
     else if (man && (/\bcover\s*1\b|\bblitz\s*1\b|\bsaw\s*blitz\s*1\b|\bdog\s*1\b|\bbrave\b/.test(n))) key = "cover_1";
     else if (zone && (/\bcover\s*6\b|\bquarter\s*quarter\s*half\b/.test(n))) key = "cover_6";
     else if (zone && (/\bcover\s*4\b|\bquarters\b|\bblitz\s*4\b/.test(n))) key = "cover_4";
-    else if (zone && (/\bcover\s*3\b|\b3\s*(sky|buzz|cloud)\b|\boverload\s*3\b|\bblitz\s*3\b/.test(n))) key = "cover_3";
+    else if (zone && (/\bcover\s*3\b|\b3\s+(?:double\s+)?(?:sky|buzz|cloud)\b|\boverload\s*3\b|\bblitz\s*3\b/.test(n))) key = "cover_3";
     else if (zone && (/\bcover\s*2\b|\btampa\s*2\b|\b2\s*trap\b|\bblitz\s*2\b/.test(n))) key = "cover_2";
 
     if (!key) return null;
@@ -111,6 +111,26 @@ class CatalogResolver {
       concepts,
       modifiers,
       variants: matches.length
+    };
+  }
+
+  describeDefensivePlay(name) {
+    const matches = this.lookup(name, "defense");
+    if (!matches.length) return null;
+    const resolved = this.resolveCoverage(name);
+    const assignmentFamilies = [...new Set(matches.flatMap(x => x.assignmentFamilies || []))];
+    const concepts = [...new Set(matches.flatMap(x => x.concepts || []))];
+    const normalized = normalize(name);
+    return {
+      name,
+      coverageFamily: resolved?.key || null,
+      confidence: resolved?.confidence || "unknown",
+      assignmentFamilies,
+      concepts,
+      pressure: /\b(blitz|pressure|fire|smoke|sting|zero|dog)\b/.test(normalized),
+      playTypes: [...new Set(matches.map(x => x.playType).filter(x => x != null))],
+      variants: matches.length,
+      source: "catalog",
     };
   }
 }
