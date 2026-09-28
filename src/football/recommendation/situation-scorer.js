@@ -16,7 +16,9 @@ function scoreSituation(play, situation = {}) {
   const yardLine = Number.isFinite(Number(situation.yardLine)) ? Number(situation.yardLine) : null;
   const quarter = Number(situation.quarter || 0);
   const clock = Number.isFinite(Number(situation.clockSeconds)) ? Number(situation.clockSeconds) : null;
-  const scoreDiff = Number.isFinite(Number(situation.scoreDifferential)) ? Number(situation.scoreDifferential) : 0;
+  const scoreDiff = situation.scoreDifferential == null
+    ? null
+    : (Number.isFinite(Number(situation.scoreDifferential)) ? Number(situation.scoreDifferential) : null);
   const flags = situation.flags || {};
 
   let score = 0;
