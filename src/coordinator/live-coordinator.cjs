@@ -150,6 +150,60 @@ function initialCoordinatorPlay(playbooks, coordinatorWindow) {
   return null;
 }
 
+function buildOracleAudibleScope(playbook, selectedPlay, audiblePackage) {
+  const formation = selectedPlay?.formation || null;
+  const keepOnly = {
+    available: false,
+    formation,
+    playbook: { ...(playbook || {}), plays: selectedPlay ? [selectedPlay] : [] },
+    audiblePlays: [],
+  };
+
+  if (!selectedPlay || !formation) {
+    return { ...keepOnly, reason: 'The current selected play could not be resolved to a formation, so Oracle will not invent an audible.' };
+  }
+  if (!audiblePackage?.available) {
+    return { ...keepOnly, reason: `No four-play audible package is available for ${formation}; Oracle is limited to KEEP.` };
+  }
+  if (audiblePackage.confirmed !== true) {
+    return { ...keepOnly, reason: `The ${formation} audible package is not confirmed to match the in-game slots, so Oracle is limited to KEEP.` };
+  }
+
+  const allPlays = playbook?.plays || [];
+  const audiblePlays = [];
+  for (const slot of audiblePackage.slots || []) {
+    const slotFormation = slot.formation || formation;
+    if (String(slotFormation) !== String(formation)) {
+      return { ...keepOnly, reason: `The confirmed audible package contains a play outside ${formation}; Oracle is limited to KEEP.` };
+    }
+    const found = allPlays.find(play =>
+      String(play.formation || '') === String(formation) &&
+      (slot.playId != null
+        ? String(play.id) === String(slot.playId)
+        : String(play.name || '') === String(slot.playName || ''))
+    );
+    if (!found) {
+      return { ...keepOnly, reason: `A confirmed ${formation} audible no longer resolves in the active playbook; Oracle is limited to KEEP.` };
+    }
+    if (!audiblePlays.some(play => samePlay(play, found))) audiblePlays.push(found);
+  }
+
+  const scoped = [selectedPlay];
+  for (const play of audiblePlays) {
+    if (!scoped.some(existing => samePlay(existing, play))) scoped.push(play);
+  }
+
+  return {
+    available: audiblePlays.length > 0,
+    formation,
+    playbook: { ...(playbook || {}), plays: scoped },
+    audiblePlays,
+    reason: audiblePlays.length
+      ? null
+      : `No confirmed audible alternatives resolve for ${formation}; Oracle is limited to KEEP.`,
+  };
+}
+
 function decideOracleRecommendation(initialPlay, ranked, threshold = ORACLE_CHANGE_THRESHOLD) {
   const candidates = ranked?.strategicCandidates || ranked?.recommendations || [];
   const best = candidates[0] || null;
@@ -245,16 +299,64 @@ function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
 
 function printOracleRecommendation(engine, playbooks, state, exactDefense, io, coordinatorWindow) {
   if (!exactDefense || !isOffensiveScrimmageSituation(state)) return null;
-  const initialPlay = initialCoordinatorPlay(playbooks, coordinatorWindow);
+
+  // Oracle is post-selection adaptation: reason from the user's current live
+  // call, never from the coordinator's earlier Stage-1 recommendation.
+  const offenseCall = callFromState(state, 'offense');
+  if (!offenseCall.available || !offenseCall.name) return null;
+  const initialPlay = findPlay(playbooks.offense, {
+    id: offenseCall.id,
+    name: offenseCall.name,
+    set: offenseCall.set,
+  });
   if (!initialPlay) return null;
 
-  const ranked = engine.recommendPlays({
-    playbook: playbooks.offense,
-    defensePlay: exactDefense,
-    situation: situationFromState(state),
-    limit: Math.max(3, playbooks.offense?.plays?.length || 3),
-  });
-  const oracle = decideOracleRecommendation(initialPlay, ranked);
+  // An Oracle CHANGE is an audible. Its candidate universe is therefore KEEP
+  // plus the four CONFIRMED in-game audibles for this exact formation.
+  const audiblePackage = engine.getAudiblePackage?.(playbooks.offense, initialPlay.formation) || null;
+  const scope = buildOracleAudibleScope(playbooks.offense, initialPlay, audiblePackage);
+
+  let oracle;
+  if (!scope.available) {
+    oracle = {
+      decision: 'KEEP',
+      play: initialPlay,
+      replacement: null,
+      scoreDelta: 0,
+      reason: scope.reason,
+    };
+  } else {
+    const ranked = engine.recommendPlays({
+      playbook: scope.playbook,
+      defensePlay: exactDefense,
+      situation: situationFromState(state),
+      limit: scope.playbook.plays.length,
+    });
+    oracle = decideOracleRecommendation(initialPlay, ranked);
+
+    if (oracle.decision === 'CHANGE' &&
+        !scope.audiblePlays.some(play => samePlay(play, oracle.replacement))) {
+      oracle = {
+        decision: 'KEEP',
+        play: initialPlay,
+        replacement: null,
+        scoreDelta: 0,
+        reason: 'No confirmed same-formation audible is materially better than the current play.',
+      };
+    } else if (oracle.decision === 'CHANGE') {
+      oracle = {
+        ...oracle,
+        reason: oracle.scoreDelta == null
+          ? `The current play is outside the exact-defense counter set; ${oracle.replacement?.name || 'the recommended audible'} is a confirmed ${initialPlay.formation} audible.`
+          : `The revealed defense makes confirmed audible ${oracle.replacement?.name || ''} materially better (+${Number(oracle.scoreDelta).toFixed(2)}).`,
+      };
+    } else {
+      oracle = {
+        ...oracle,
+        reason: `No confirmed ${initialPlay.formation} audible is materially better than the current play.`,
+      };
+    }
+  }
 
   coordinatorWindow.showOracleRecommendation({
     decision: oracle.decision,
@@ -266,7 +368,7 @@ function printOracleRecommendation(engine, playbooks, state, exactDefense, io, c
 
   io.log(`[OC] CPU DEFENSE: ${exactDefense.formation || '?'} / ${exactDefense.name} (${exactDefense.coverageFamily || 'unresolved'})`);
   if (oracle.decision === 'CHANGE') {
-    io.log(`[OC] ORACLE: CHANGE TO ${oracle.replacement?.formation || '?'} / ${oracle.replacement?.name || oracle.replacement?.id}`);
+    io.log(`[OC] ORACLE: AUDIBLE TO ${oracle.replacement?.formation || '?'} / ${oracle.replacement?.name || oracle.replacement?.id}`);
     engine.recordRecommendation?.('offense', { play: oracle.replacement }, {
       opponentPlay: exactDefense,
       situation: situationFromState(state),
@@ -893,12 +995,16 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
         );
 
         const exactDefense = exactDefenseFromState(engine, current, fresh);
-        if (current.possession === 0 && exactDefense && coordinatorWindow.state.coordinatorCall) {
+        const oracleOffenseCall = callFromState(current, 'offense');
+        if (current.possession === 0 && fresh.offense && exactDefense && oracleOffenseCall.available) {
           const oracleRecommendationKey = [
             current.quarter,
             current.down,
             current.distance,
             current.fieldX,
+            oracleOffenseCall.set || '',
+            oracleOffenseCall.name || '',
+            oracleOffenseCall.id || '',
             exactDefense.id || exactDefense.name,
           ].join('|');
           if (oracleRecommendationKey !== lastOracleRecommendationKey) {
@@ -965,6 +1071,7 @@ module.exports = {
   situationFromState,
   snapToFootballEvent,
   isOffensiveScrimmageSituation,
+  buildOracleAudibleScope,
   printRecommendation,
   printOracleRecommendation,
   decideOracleRecommendation,

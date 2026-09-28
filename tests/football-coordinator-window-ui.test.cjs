@@ -320,7 +320,7 @@ test('render keeps coordinator call primary while showing user selection, CPU de
   assert.match(contextHtml, /CPU DEFENSE/);
   assert.match(contextHtml, /Nickel Blitz 1/);
   assert.match(contextHtml, /ORACLE/);
-  assert.match(contextHtml, /CHANGE TO PA Power G Drive/);
+  assert.match(contextHtml, /AUDIBLE TO PA Power G Drive/);
   assert.match(elements.get('detail').innerHTML, /WHY/);
   assert.match(elements.get('detail').innerHTML, /Attack the crease/);
 });

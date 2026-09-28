@@ -16,6 +16,7 @@ const {
   formatAuthorityDiagnostic,
   logAuthorityTransition,
   printExecutionAdvice,
+  buildOracleAudibleScope,
 } = require('../src/coordinator/live-coordinator.cjs');
 
 function artifact(entries) {
@@ -407,4 +408,47 @@ test('PowerShell READ diagnostics prefer actionable authoritative guide over kno
   assert.ok(authoritativeIndex >= 0);
   assert.ok(readIndex > authoritativeIndex);
   assert.equal(legacyIndex, -1);
+});
+
+
+test('Oracle scope is current play plus only four confirmed audibles from the same formation', () => {
+  const selected = { id: 'sel', name: 'MTN SPACING', formation: 'Gun Bunch Spread Nasty' };
+  const same = [
+    { id: 'a1', name: 'Quick Out', formation: 'Gun Bunch Spread Nasty' },
+    { id: 'a2', name: 'Inside Zone', formation: 'Gun Bunch Spread Nasty' },
+    { id: 'a3', name: 'Flood', formation: 'Gun Bunch Spread Nasty' },
+    { id: 'a4', name: 'Verts', formation: 'Gun Bunch Spread Nasty' },
+  ];
+  const other = { id: 'x1', name: 'WEAK FLOOD', formation: 'I Form Slot' };
+  const playbook = { id: 'pb', name: 'Pro Style', plays: [selected, ...same, other] };
+  const pkg = {
+    available: true,
+    confirmed: true,
+    formation: selected.formation,
+    slots: same.map((play, index) => ({
+      slot: 'AUDIBLE_' + (index + 1),
+      playId: play.id,
+      playName: play.name,
+      formation: play.formation,
+    })),
+  };
+  const scope = buildOracleAudibleScope(playbook, selected, pkg);
+  assert.equal(scope.available, true);
+  assert.deepEqual(scope.playbook.plays.map(play => play.id), ['sel', 'a1', 'a2', 'a3', 'a4']);
+  assert.ok(scope.playbook.plays.every(play => play.formation === selected.formation));
+  assert.ok(!scope.playbook.plays.some(play => play.id === 'x1'));
+});
+
+test('Oracle fails closed to KEEP when current formation audibles are not confirmed', () => {
+  const selected = { id: 'sel', name: 'MTN SPACING', formation: 'Gun Bunch Spread Nasty' };
+  const playbook = { id: 'pb', plays: [selected, { id: 'x1', name: 'WEAK FLOOD', formation: 'I Form Slot' }] };
+  const scope = buildOracleAudibleScope(playbook, selected, {
+    available: true,
+    confirmed: false,
+    formation: selected.formation,
+    slots: [],
+  });
+  assert.equal(scope.available, false);
+  assert.deepEqual(scope.playbook.plays.map(play => play.id), ['sel']);
+  assert.match(scope.reason, /not confirmed/i);
 });

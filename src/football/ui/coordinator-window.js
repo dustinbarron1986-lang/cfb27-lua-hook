@@ -616,7 +616,7 @@ function renderOffenseContext(s) {
   }
   if (s.oracleDecision) {
     const oracleText = s.oracleDecision === 'CHANGE'
-      ? 'CHANGE TO ' + (s.oracleCall || 'better counter') + (s.oracleFormation ? ' — ' + s.oracleFormation : '')
+      ? 'AUDIBLE TO ' + (s.oracleCall || 'better counter') + (s.oracleFormation ? ' — ' + s.oracleFormation : '')
       : 'KEEP';
     rows.push(detail('ORACLE', oracleText + (s.oracleReason ? ' — ' + s.oracleReason : '')));
   }
