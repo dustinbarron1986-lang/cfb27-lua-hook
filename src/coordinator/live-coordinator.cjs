@@ -81,17 +81,35 @@ function situationFromState(state) {
     possession: state.possession,
     offenseScore: null,
     defenseScore: null,
-    scoreDifferential: 0,
+    scoreDifferential: null,
   };
   base.flags = deriveSituation(base);
   return base;
 }
 
-function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
+function exactDefenseFromState(engine, state, fresh = null) {
+  if (state?.possession !== 0 || fresh?.defense !== true) return null;
+  const call = callFromState(state, 'defense');
+  if (!call.available || !call.name) return null;
+  const descriptor = engine.knowledge.catalogResolver?.describeDefensivePlay?.(call.name) || null;
+  return {
+    id: call.id || call.name,
+    name: call.name,
+    formation: call.set,
+    set: call.set,
+    coverageFamily: descriptor?.coverageFamily || engine.knowledge.resolveCoverage(call.name) || null,
+    assignmentFamilies: descriptor?.assignmentFamilies || [],
+    concepts: descriptor?.concepts || [],
+  };
+}
+
+function printRecommendation(engine, playbooks, state, io, coordinatorWindow, exactDefense = null) {
   if (state.possession !== 0) return;
+  const situation = situationFromState(state);
   const ranked = engine.recommendPlays({
     playbook: playbooks.offense,
-    situation: situationFromState(state),
+    defensePlay: exactDefense,
+    situation,
     limit: 3,
   });
   const top = ranked.recommendations[0];
@@ -110,7 +128,15 @@ function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
     },
     reasons: top.reasons?.slice(0, 3) || [],
   }, state);
+  engine.recordRecommendation?.('offense', top, {
+    opponentPlay: exactDefense,
+    situation,
+    family: top.diagnostic?.counter?.structure?.primaryThreat || top.play.primaryConcept || top.play.presentationFamily || null,
+  });
   io.log(`\n[OC] ${downText(state.down)} & ${state.distance} | Q${state.quarter} ${fmtClock(state.gameClockSeconds)}`);
+  if (exactDefense) {
+    io.log(`[OC] CPU DEFENSE: ${exactDefense.formation || '?'} / ${exactDefense.name} (${exactDefense.coverageFamily || 'unresolved'})`);
+  }
   io.log(`[OC] CALL: ${top.play.formation || '?'} / ${top.play.name || top.play.id}  score=${top.score}`);
   if (top.reasons?.length) io.log(`[OC] WHY: ${top.reasons.slice(0, 3).join(' | ')}`);
   if (ranked.tendency?.attempts) {
@@ -325,7 +351,7 @@ function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coor
   return key;
 }
 
-function printDefensiveRecommendation(engine, playbooks, state, seenKey, fresh, io, coordinatorWindow) {
+function printDefensiveRecommendation(engine, playbooks, state, seenKey, fresh, io, coordinatorWindow, authoritativeOffenseStructure = null) {
   if (state.possession !== 1) return seenKey;
   // Only the CPU's offensive call needs to be fresh -- our candidates come
   // from the user's selected defensive playbook, not from the game's own
@@ -340,12 +366,16 @@ function printDefensiveRecommendation(engine, playbooks, state, seenKey, fresh, 
   // Resolve the CPU's exact call to a concept via the Stage 1 catalog-first
   // KnowledgeEngine (the canonical resolver) rather than a second parser.
   const resolvedConcept = engine.knowledge.resolveConcept(cpu.name) || null;
+  const authoredConcepts = authoritativeOffenseStructure?.play?.concepts || [];
   const offensePlay = {
     id: cpu.id || cpu.name,
     name: cpu.name,
     formation: cpu.set,
-    concepts: resolvedConcept ? [resolvedConcept] : [],
-    primaryConcept: resolvedConcept,
+    type: authoritativeOffenseStructure?.play?.offensePlayType || null,
+    concepts: authoredConcepts.length ? authoredConcepts : (resolvedConcept ? [resolvedConcept] : []),
+    primaryConcept: authoredConcepts[0] || resolvedConcept,
+    modifiers: authoritativeOffenseStructure?.play?.flowType ? [authoritativeOffenseStructure.play.flowType] : [],
+    authoritativeStructure: authoritativeOffenseStructure?.status === 'resolved' ? authoritativeOffenseStructure : null,
   };
 
   const ranked = engine.recommendDefenses({
@@ -376,6 +406,11 @@ function printDefensiveRecommendation(engine, playbooks, state, seenKey, fresh, 
     locator: { formation: top.play.formation || null },
     reasons: top.reasons?.slice(0, 3) || [],
   }, state);
+  engine.recordRecommendation?.('defense', top, {
+    opponentPlay: offensePlay,
+    situation: situationFromState(state),
+    family: top.diagnostic?.defenseFamily || top.play.coverageFamily || top.play.presentationFamily || null,
+  });
 
   io.log(`\n[DC] ${downText(state.down)} & ${state.distance} | Q${state.quarter} ${fmtClock(state.gameClockSeconds)}`);
   io.log(`[DC] CPU CALL: ${cpu.set || '?'} / ${cpu.name}${resolvedConcept ? ` (concept: ${resolvedConcept})` : ''}`);
@@ -414,8 +449,10 @@ function handleNewSituation(engine, playbooks, current, lastSituationKey, situat
     available: false,
     reason: 'New situation detected; recommendation pending.',
   }, current);
-  printRecommendation(engine, playbooks, current, io, coordinatorWindow);
-
+  // Do not recommend offense yet: the exact CPU defensive call at a situation
+  // boundary may still be stale from the prior snap. The main loop waits for
+  // the existing defensive freshness lifecycle before invoking the OC.
+  
   // Snapshot whatever is currently exposed, per side, as the quarantined
   // baseline that updateSideFreshness() must see proof against before either
   // side is allowed to drive execution advice / a defensive recommendation.
@@ -539,8 +576,12 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
     let appliedImmediately = false;
     const lastKnownState = getLastKnownState();
     if (side === 'offense' && lastKnownState && coordinatorWindow.state.phase === 'huddle') {
-      printRecommendation(engine, playbooks, lastKnownState, io, coordinatorWindow);
-      appliedImmediately = true;
+      const fresh = getFresh();
+      const exactDefense = exactDefenseFromState(engine, lastKnownState, fresh);
+      if (exactDefense) {
+        printRecommendation(engine, playbooks, lastKnownState, io, coordinatorWindow, exactDefense);
+        appliedImmediately = true;
+      }
     } else if (side === 'defense' && lastKnownState && coordinatorWindow.state.phase === 'defensive_huddle') {
       const fresh = getFresh();
       if (fresh.offense) {
@@ -578,6 +619,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   const reducer = new SnapReducer();
   let lastSituationKey = null;
   let lastExecutionKey = null;
+  let lastOffensiveRecommendationKey = null;
   // Diagnostic-only deduplication. This key never participates in freshness,
   // authority resolution, snap detection, performance recording, or advice.
   let lastAuthorityDiagnosticKey = null;
@@ -654,6 +696,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
 
           lastSituationKey = situationKey;
           lastExecutionKey = null;
+          lastOffensiveRecommendationKey = null;
         }
         const previousFresh = fresh;
         ({ fresh, cleared } = updateFreshness(current, quarantine, fresh, cleared));
@@ -665,18 +708,18 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
         // stale/unavailable calls therefore cannot retain prior EA identity,
         // while an audible is re-resolved immediately from the new live call.
         const offensiveLiveCall = callFromState(current, 'offense');
-        const authoritativeOffense = current.possession === 0
-          ? resolveFreshOffensiveAuthority({
-              store: authoritativePlayStore,
-              playbook: playbooks.offense,
-              liveCall: offensiveLiveCall,
-              fresh: fresh.offense,
-            })
-          : {
-              status: 'unresolved',
-              reason: 'user_not_on_offense',
-              authorityEligible: false,
-            };
+        // The exact opponent offensive call is just as useful on defense as
+        // the user's own selected play is on offense. The strict Set+Play
+        // authority resolver is therefore shared by both possession paths.
+        const authoritativeOffense = resolveFreshOffensiveAuthority({
+          store: authoritativePlayStore,
+          playbook: playbooks.offense,
+          liveCall: offensiveLiveCall,
+          fresh: fresh.offense,
+        });
+        const authoritativeOffenseStructure = authoritativeOffense?.status === 'resolved'
+          ? authoritativePlayStore.expandPlay(authoritativeOffense.playKey)
+          : null;
 
         lastAuthorityDiagnosticKey = logAuthorityTransition(
           authoritativeOffense,
@@ -684,6 +727,21 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
           lastAuthorityDiagnosticKey,
           io
         );
+
+        const exactDefense = exactDefenseFromState(engine, current, fresh);
+        if (current.possession === 0 && exactDefense) {
+          const offensiveRecommendationKey = [
+            current.quarter,
+            current.down,
+            current.distance,
+            current.fieldX,
+            exactDefense.id || exactDefense.name,
+          ].join('|');
+          if (offensiveRecommendationKey !== lastOffensiveRecommendationKey) {
+            printRecommendation(engine, playbooks, current, io, coordinatorWindow, exactDefense);
+            lastOffensiveRecommendationKey = offensiveRecommendationKey;
+          }
+        }
 
         lastExecutionKey = printExecutionAdvice(
           engine,
@@ -695,7 +753,16 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
           coordinatorWindow,
           authoritativeOffense
         );
-        lastExecutionKey = printDefensiveRecommendation(engine, playbooks, current, lastExecutionKey, fresh, io, coordinatorWindow);
+        lastExecutionKey = printDefensiveRecommendation(
+          engine,
+          playbooks,
+          current,
+          lastExecutionKey,
+          fresh,
+          io,
+          coordinatorWindow,
+          authoritativeOffenseStructure
+        );
       }
 
       if (reduced.type === 'completed_snap') {
@@ -729,6 +796,7 @@ module.exports = {
   situationFromState,
   snapToFootballEvent,
   printRecommendation,
+  exactDefenseFromState,
   printExecutionAdvice,
   printDefensiveRecommendation,
   handleNewSituation,
