@@ -971,6 +971,7 @@ class CoordinatorWindow {
         defenseFormation: null,
         read: null,
         guide: null,
+        audibleRecommendation: null,
         result: null
       });
     }
