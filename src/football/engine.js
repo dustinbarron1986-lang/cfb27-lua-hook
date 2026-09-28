@@ -1,11 +1,13 @@
 const { gradeOffensivePlay, gradeDefensivePlay } = require("./scoring/success");
 const { PerformanceStore } = require("./memory/performance-store");
+const { RecommendationHistory } = require("./memory/recommendation-history");
 const { SequenceMemory } = require("./sequencing/sequence-memory");
 const { OpponentTendencies } = require("./recommendation/opponent-tendencies");
 const { PlaySelectionEngine } = require("./recommendation/play-selection-engine");
 const { ExecutionAdvisor } = require("./recommendation/execution-advisor");
 const { DefensiveSelectionEngine } = require("./recommendation/defensive-selection-engine");
 const { KnowledgeEngine } = require("./knowledge/knowledge-engine");
+const { classifyOffensiveStructure, classifyDefensiveStructure } = require("./analysis/structural-threat-model");
 
 let DatabasePlaybookRepository = null;
 try {
@@ -24,14 +26,16 @@ class FootballEngine {
 
     this.performance = new PerformanceStore();
     this.sequences = new SequenceMemory(this.performance);
-    this.tendencies = new OpponentTendencies(this.performance);
+    this.knowledge = options.knowledge || new KnowledgeEngine(options.knowledgeOptions || {});
+    this.recommendationHistory = options.recommendationHistory || new RecommendationHistory();
+    this.tendencies = new OpponentTendencies(this.performance, { knowledge: this.knowledge });
     this.playSelection = new PlaySelectionEngine({
       store: this.performance,
       sequences: this.sequences,
-      tendencies: this.tendencies
+      tendencies: this.tendencies,
+      knowledge: this.knowledge,
+      recommendationHistory: this.recommendationHistory
     });
-
-    this.knowledge = options.knowledge || new KnowledgeEngine(options.knowledgeOptions || {});
 
     this.executionAdvisor = new ExecutionAdvisor({
       knowledgeEngine: this.knowledge,
@@ -40,7 +44,9 @@ class FootballEngine {
 
     this.defensiveSelection = new DefensiveSelectionEngine({
       store: this.performance,
-      knowledge: this.knowledge
+      knowledge: this.knowledge,
+      tendencies: this.tendencies,
+      recommendationHistory: this.recommendationHistory
     });
   }
 
@@ -55,16 +61,29 @@ class FootballEngine {
 
     const enriched = {
       ...event,
-      play: offensePlay,
-      opponentPlay: defensePlay,
+      play: {
+        ...offensePlay,
+        structural: offensePlay?.structural || classifyOffensiveStructure(
+          offensePlay || {},
+          offensePlay?.authoritativeStructure || null
+        )
+      },
+      opponentPlay: defensePlay ? {
+        ...defensePlay,
+        structural: defensePlay.structural || classifyDefensiveStructure(defensePlay, this.knowledge)
+      } : defensePlay,
       timestamp: event.timestamp || new Date().toISOString(),
-      grades: {
-        offense: gradeOffensivePlay(event),
-        defense: gradeDefensivePlay(event)
-      }
+    };
+    enriched.grades = {
+      offense: gradeOffensivePlay(enriched),
+      defense: gradeDefensivePlay(enriched)
     };
     this.performance.record(enriched);
     return enriched;
+  }
+
+  recordRecommendation(side, recommendation, context = {}) {
+    return this.recommendationHistory.record(side, recommendation, context);
   }
 
   _withObservedFamily(play, side) {
@@ -81,13 +100,20 @@ class FootballEngine {
       return { ...play, conceptFamily: conceptFamily || play.presentationFamily || null };
     }
 
+    const descriptor = this.knowledge.catalogResolver?.describeDefensivePlay?.(play.name) || null;
     const coverageFamily =
       play.coverageFamily ||
+      descriptor?.coverageFamily ||
       this.knowledge.resolveCoverage(play.name || (play.concepts || []).join(" ")) ||
       play.presentationFamily ||
       null;
 
-    return { ...play, coverageFamily };
+    return {
+      ...play,
+      coverageFamily,
+      assignmentFamilies: play.assignmentFamilies?.length ? play.assignmentFamilies : (descriptor?.assignmentFamilies || []),
+      concepts: play.concepts?.length ? play.concepts : (descriptor?.concepts || [])
+    };
   }
 
   playSummary(playId) { return this.performance.summarizePlay(playId); }
@@ -105,18 +131,33 @@ class FootballEngine {
     return this.playbooks.get(selector, options);
   }
 
-  recommendPlays({ playbook, situation, limit = 5 }) {
-    // Deliberately does NOT accept/use the current exact defensive call.
-    return this.playSelection.rank({ playbook, situation, limit });
+  recommendPlays({ playbook, defensePlay = null, situation, limit = 5 }) {
+    // ORACLE/OMNISCIENT mode: the exact CPU defensive call may define the
+    // structural counter envelope. Missing defense data degrades to the
+    // previous pre-call model rather than fabricating opponent structure.
+    const normalizedDefense = defensePlay ? this._withObservedFamily(defensePlay, "defense") : null;
+    return this.playSelection.rank({
+      playbook,
+      defensePlay: normalizedDefense,
+      situation,
+      limit
+    });
   }
 
   recommendDefenses({ playbook, offensePlay, situation, limit = 5 }) {
     // Unlike recommendPlays, the exact CPU offensive call is the intentional
     // defensive-oracle MVP input here -- this restriction is offense-only.
     const normalizedOffense = this._withObservedFamily(offensePlay, "offense");
+    const structuralOffense = {
+      ...normalizedOffense,
+      structural: normalizedOffense?.structural || classifyOffensiveStructure(
+        normalizedOffense || {},
+        normalizedOffense?.authoritativeStructure || null
+      )
+    };
     return this.defensiveSelection.rank({
       playbook,
-      offensePlay: normalizedOffense,
+      offensePlay: structuralOffense,
       situation,
       limit
     });
