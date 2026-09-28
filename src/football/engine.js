@@ -176,6 +176,14 @@ class FootballEngine {
     return this.audiblePackages.ensurePackage(playbook, formation);
   }
 
+  listAudiblePackages(playbook) {
+    return this.audiblePackages.ensureForPlaybook(playbook);
+  }
+
+  confirmAudiblePackage(playbook, formation, playIds) {
+    return this.audiblePackages.confirmPackage({ playbook, formation, playIds });
+  }
+
   reviewAudiblePackages(playbook, options = {}) {
     return this.audiblePackages.review({
       playbook,

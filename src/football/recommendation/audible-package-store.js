@@ -121,6 +121,9 @@ function buildComplementaryPackage({ playbook, formation } = {}) {
     playbookName: playbook?.name || null,
     formation: formation || null,
     generatedAt: new Date().toISOString(),
+    confirmed: false,
+    confirmedAt: null,
+    confirmationSource: null,
     slots: selected.map((row, index) => ({
       slot: AUDIBLE_SLOTS[index],
       playId: playId(row.play),
@@ -204,6 +207,9 @@ class AudiblePackageStore {
       playbookName: playbook.name || null,
       formation,
       generatedAt: new Date().toISOString(),
+      confirmed: false,
+      confirmedAt: null,
+      confirmationSource: null,
       slots: slots.map((row, index) => ({
         ...clone(row),
         slot: AUDIBLE_SLOTS[index],
@@ -228,6 +234,22 @@ class AudiblePackageStore {
     return clone(generated);
   }
 
+  confirmPackage({ playbook, formation, playIds, source = 'USER_CONFIRMED' } = {}) {
+    const pkg = this.ensurePackage(playbook, formation);
+    if (!pkg?.available) throw new Error(pkg?.reason || 'Audible package is unavailable.');
+    const expected = pkg.slots.map(slot => String(slot.playId));
+    const actual = Array.isArray(playIds) ? playIds.map(String) : [];
+    if (actual.length !== expected.length || actual.some((id, index) => id !== expected[index])) {
+      throw new Error('Confirmed audible slots must exactly match the current four planned slots in order.');
+    }
+    pkg.confirmed = true;
+    pkg.confirmedAt = new Date().toISOString();
+    pkg.confirmationSource = source;
+    this.packages.set(this._key(playbook.id, formation), pkg);
+    this._save();
+    return clone(pkg);
+  }
+
   ensureForPlaybook(playbook) {
     const formations = [...new Set((playbook?.plays || []).map(play => play.formation).filter(Boolean))];
     const packages = [];
@@ -250,6 +272,7 @@ class AudiblePackageStore {
 
     const reviews = [];
     for (const pkg of assigned.values()) {
+      if (!pkg.confirmed) continue;
       const slotRows = pkg.slots.map(slot => ({
         slot,
         summary: performanceStore.summarizePlay(slot.playId),

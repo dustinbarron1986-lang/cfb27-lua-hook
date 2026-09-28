@@ -129,10 +129,13 @@ test('package persistence is keyed by playbook plus formation', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('live audible candidates are restricted to the current formation and assigned four slots', () => {
+test('unconfirmed planned audibles fail closed, then exact confirmation enables only the current four slots', () => {
   const book = playbook();
   const store = new AudiblePackageStore();
-  const pkg = store.ensurePackage(book, 'Gun Ace');
+  const planned = store.ensurePackage(book, 'Gun Ace');
+  assert.equal(planned.confirmed, false);
+  assert.equal(resolveAudibleCandidates({ audiblePackage: planned, playbook: book, formation: 'Gun Ace' }).length, 0);
+  const pkg = store.confirmPackage({ playbook: book, formation: 'Gun Ace', playIds: planned.slots.map(slot => slot.playId) });
   const rows = resolveAudibleCandidates({ audiblePackage: pkg, playbook: book, formation: 'Gun Ace' });
   assert.equal(rows.length, 4);
   assert.ok(rows.every(row => row.play.formation === 'Gun Ace'));
@@ -142,6 +145,7 @@ test('live audible candidates are restricted to the current formation and assign
 test('an unavailable play cannot be recommended from a stale package slot', () => {
   const book = playbook();
   const pkg = buildComplementaryPackage({ playbook: book, formation: 'Gun Ace' });
+  pkg.confirmed = true;
   pkg.slots[0] = { ...pkg.slots[0], playId: 'missing', playName: 'Missing' };
   const rows = resolveAudibleCandidates({ audiblePackage: pkg, playbook: book, formation: 'Gun Ace' });
   assert.equal(rows.length, 3);
@@ -217,7 +221,8 @@ test('combined protection plus hot route regrades the play and never hot-routes 
 test('audible selection only evaluates the four current-formation slots', () => {
   const book = playbook();
   const store = new AudiblePackageStore();
-  const pkg = store.ensurePackage(book, 'Gun Ace');
+  const planned = store.ensurePackage(book, 'Gun Ace');
+  const pkg = store.confirmPackage({ playbook: book, formation: 'Gun Ace', playIds: planned.slots.map(slot => slot.playId) });
   const selected = { ...book.plays.find(x => x.id === 'a1'), concepts: [] };
   const result = advisePreSnapCoordinator({
     selectedPlay: selected,
@@ -263,6 +268,7 @@ test('historical performance ranks structurally equivalent valid audible candida
   const defensiveCall = defense('Mid Blitz');
   const pkg = {
     available: true,
+    confirmed: true,
     playbookId: book.id,
     formation: 'Gun Ace',
     slots: [
@@ -320,7 +326,8 @@ test('Best Bet exposes structured callout data only when evidence is sufficient'
 test('postgame review does not replace on an insufficient sample and preserves role on replacement', () => {
   const book = playbook();
   const pkgStore = new AudiblePackageStore();
-  const pkg = pkgStore.ensurePackage(book, 'Gun Ace');
+  const planned = pkgStore.ensurePackage(book, 'Gun Ace');
+  const pkg = pkgStore.confirmPackage({ playbook: book, formation: 'Gun Ace', playIds: planned.slots.map(slot => slot.playId) });
   const perf = new PerformanceStore();
   const watched = book.plays.find(x => String(x.id) === String(pkg.slots[0].playId));
   perf.record(eventFor(watched, false));

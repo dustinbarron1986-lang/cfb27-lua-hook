@@ -307,6 +307,11 @@ function renderPage(title = 'CFB 27 Offensive Coordinator') {
     padding: 6px 14px; font-weight: 800; font-size: 12px; cursor: pointer;
   }
   .settingsMessage { font-size: 11.5px; color: var(--muted); }
+  .audiblePackages { grid-column: 1 / -1; display: grid; gap: 8px; margin-top: 4px; }
+  .audiblePackage { border: 1px solid rgba(255,255,255,.10); border-radius: 8px; padding: 8px 10px; background: rgba(255,255,255,.025); }
+  .audiblePackageHead { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 11.5px; font-weight: 800; }
+  .audibleSlots { margin-top: 5px; font-size: 11px; color: var(--muted); line-height: 1.45; }
+  .audiblePackage button { font: inherit; font-size: 10.5px; padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: var(--text); cursor: pointer; }
   @media (max-width: 680px) {
     .coachGrid { grid-template-columns: 1fr; }
   }
@@ -340,6 +345,7 @@ function renderPage(title = 'CFB 27 Offensive Coordinator') {
         <button id="savePlaybooks" type="button">Save</button>
         <span id="settingsMessage" class="settingsMessage"></span>
       </div>
+      <div id="audiblePackages" class="audiblePackages"></div>
     </div>
   </details>
   <div id="situation" class="situation"><span class="pill">Waiting for game state…</span></div>
@@ -704,9 +710,11 @@ const settingsEls = {
   offenseStatus: document.getElementById('offenseStatus'),
   defenseStatus: document.getElementById('defenseStatus'),
   saveButton: document.getElementById('savePlaybooks'),
-  message: document.getElementById('settingsMessage')
+  message: document.getElementById('settingsMessage'),
+  audiblePackages: document.getElementById('audiblePackages')
 };
 let playbookLists = { offense: [], defense: [] };
+let audiblePackageState = { packages: [], gaps: [] };
 
 function describeBook(book) {
   if (!book) return '';
@@ -726,20 +734,38 @@ function updateStatus(el, books, selectedId, emptyText) {
   const book = books.find(b => String(b.id) === String(selectedId));
   el.textContent = book ? describeBook(book) : 'selected playbook not found in current list';
 }
+function renderAudiblePackages(data) {
+  audiblePackageState = data || { packages: [], gaps: [] };
+  const rows = audiblePackageState.packages || [];
+  if (!rows.length) {
+    settingsEls.audiblePackages.innerHTML = '<div class="settingsStatus">No four-play audible packages are available for the selected offense.</div>';
+    return;
+  }
+  settingsEls.audiblePackages.innerHTML = rows.map((pkg, index) => {
+    const slots = (pkg.slots || []).map(slot => esc(slot.slot.replace('AUDIBLE_', '')) + ': ' + esc(slot.playName) + ' — ' + esc(slot.role || 'complementary answer')).join('<br>');
+    const status = pkg.confirmed ? 'CONFIRMED' : 'PLANNED — NOT VERIFIED IN GAME';
+    const button = pkg.confirmed ? '' : '<button type="button" data-audible-confirm="' + index + '">Confirm matches game</button>';
+    return '<div class="audiblePackage"><div class="audiblePackageHead"><span>' + esc(pkg.formation) + ' · ' + status + '</span>' + button + '</div><div class="audibleSlots">' + slots + '</div></div>';
+  }).join('');
+}
+
 async function loadSettingsPanel() {
   try {
-    const [playbooksRes, configRes] = await Promise.all([
+    const [playbooksRes, configRes, audibleRes] = await Promise.all([
       fetch('/api/playbooks', { cache: 'no-store' }),
-      fetch('/api/config', { cache: 'no-store' })
+      fetch('/api/config', { cache: 'no-store' }),
+      fetch('/api/audibles', { cache: 'no-store' })
     ]);
     playbookLists = playbooksRes.ok ? await playbooksRes.json() : { offense: [], defense: [] };
     const config = configRes.ok ? await configRes.json() : {};
+    const audibles = audibleRes.ok ? await audibleRes.json() : { packages: [], gaps: [] };
     populateSelect(settingsEls.offenseSelect, playbookLists.offense || [], config.offensePlaybookId, 'Select offensive playbook');
     populateSelect(settingsEls.defenseSelect, playbookLists.defense || [], config.defensePlaybookId, 'Select defensive playbook');
     updateStatus(settingsEls.offenseStatus, playbookLists.offense || [], config.offensePlaybookId, 'none selected');
     updateStatus(settingsEls.defenseStatus, playbookLists.defense || [], config.defensePlaybookId, 'none selected');
+    renderAudiblePackages(audibles);
   } catch (_) {
-    settingsEls.message.textContent = 'Could not load playbook list.';
+    settingsEls.message.textContent = 'Could not load coordinator settings.';
   }
 }
 settingsEls.offenseSelect.addEventListener('change', () => {
@@ -748,6 +774,28 @@ settingsEls.offenseSelect.addEventListener('change', () => {
 settingsEls.defenseSelect.addEventListener('change', () => {
   updateStatus(settingsEls.defenseStatus, playbookLists.defense || [], settingsEls.defenseSelect.value, 'none selected');
 });
+settingsEls.audiblePackages.addEventListener('click', async event => {
+  const button = event.target.closest('[data-audible-confirm]');
+  if (!button) return;
+  const index = Number(button.getAttribute('data-audible-confirm'));
+  const pkg = audiblePackageState.packages?.[index];
+  if (!pkg) return;
+  settingsEls.message.textContent = 'Confirming ' + pkg.formation + '…';
+  try {
+    const r = await fetch('/api/audibles/confirm', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ formation: pkg.formation, playIds: (pkg.slots || []).map(slot => slot.playId) })
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || 'Failed to confirm audible package');
+    settingsEls.message.textContent = pkg.formation + ' audibles confirmed.';
+    await loadSettingsPanel();
+  } catch (error) {
+    settingsEls.message.textContent = String(error?.message || error);
+  }
+});
+
 settingsEls.saveButton.addEventListener('click', async () => {
   settingsEls.message.textContent = 'Saving…';
   const requests = [];
@@ -1104,6 +1152,27 @@ class CoordinatorWindow {
       if (req.method === 'GET' && req.url === '/api/config') {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store, max-age=0' });
         res.end(JSON.stringify(this.playbookService ? this.playbookService.getConfig() : {}));
+        return;
+      }
+      if (req.method === 'GET' && req.url === '/api/audibles') {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store, max-age=0' });
+        res.end(JSON.stringify(this.playbookService?.listAudiblePackages?.() || { packages: [], gaps: [] }));
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/api/audibles/confirm') {
+        if (!this.playbookService?.confirmAudiblePackage) {
+          res.writeHead(503, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'Audible confirmation is not available in this session.' }));
+          return;
+        }
+        readJsonBody(req).then(body => {
+          const result = this.playbookService.confirmAudiblePackage({ formation: body.formation, playIds: body.playIds });
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(result));
+        }).catch(error => {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: String(error?.message || error) }));
+        });
         return;
       }
       if (req.method === 'POST' && req.url === '/api/config/playbooks') {

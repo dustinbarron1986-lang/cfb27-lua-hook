@@ -170,7 +170,7 @@ function bestHotRoute({ routes, excludedPlayerIndexes, baseStructure, baseGrade,
 }
 
 function resolveAudibleCandidates({ audiblePackage, playbook, formation }) {
-  if (!audiblePackage?.available || !Array.isArray(audiblePackage.slots)) return [];
+  if (!audiblePackage?.available || audiblePackage.confirmed !== true || !Array.isArray(audiblePackage.slots)) return [];
   const plays = playbook?.plays || [];
   const rows = [];
   for (const slot of audiblePackage.slots) {
@@ -274,6 +274,8 @@ function makeResult({ action, baseGrade, finalGrade, defenseProfile, audiblePack
     audiblePackage: audiblePackage?.available ? {
       playbookId: audiblePackage.playbookId,
       formation: audiblePackage.formation,
+      confirmed: audiblePackage.confirmed === true,
+      confirmedAt: audiblePackage.confirmedAt || null,
       slots: audiblePackage.slots,
     } : null,
     bestBet,
@@ -491,7 +493,9 @@ function advisePreSnapCoordinator({
     audiblePackage,
     authoritativeKnowledge,
     reasons: [
-      'No smaller adjustment or formation-specific audible has enough supported structural advantage to justify changing the call.',
+      audiblePackage?.available && audiblePackage.confirmed !== true
+        ? 'The formation audible package is planned but not confirmed to match the in-game audible slots, so the coordinator refuses to recommend an audible.'
+        : 'No smaller adjustment or formation-specific audible has enough supported structural advantage to justify changing the call.',
     ],
     confidence: 'LOW',
     source: 'INSUFFICIENT_EVIDENCE',

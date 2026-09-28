@@ -686,6 +686,18 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
     };
   }
 
+  function listAudiblePackages() {
+    return engine.listAudiblePackages?.(playbooks.offense) || { packages: [], gaps: [] };
+  }
+
+  function confirmAudiblePackage({ formation, playIds }) {
+    if (!formation) throw new Error('Formation is required.');
+    const pkg = engine.confirmAudiblePackage?.(playbooks.offense, formation, playIds);
+    if (!pkg) throw new Error('Audible package confirmation is unavailable.');
+    io.log(`[AUDIBLES] confirmed ${formation}: ${pkg.slots.map(slot => slot.playName).join(' | ')}`);
+    return pkg;
+  }
+
   function setPlaybookSelection({ side, playbookId }) {
     if (side !== 'offense' && side !== 'defense') {
       throw new Error(`Invalid side: ${side}`);
@@ -741,7 +753,7 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
     return { book: { id: newBook.id, name: newBook.name, playCount: newBook.plays.length }, appliedImmediately };
   }
 
-  return { listPlaybooks, getConfig, setPlaybookSelection };
+  return { listPlaybooks, getConfig, setPlaybookSelection, listAudiblePackages, confirmAudiblePackage };
 }
 
 async function runLiveCoordinator({ repoRoot, configPath, signal, io = console } = {}) {
@@ -817,7 +829,8 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
     io.log(`[COORD] Connected to CollegeFB27 pid=${game.pid}`);
     io.log(playbookLogLine('Offense', playbooks.offense));
     io.log(playbookLogLine('Defense', playbooks.defense));
-    io.log(`[AUDIBLES] prepared=${audiblePreparation.packages.length} formation packages${audiblePreparation.gaps.length ? ` gaps=${audiblePreparation.gaps.length}` : ''}`);
+    const confirmedAudibles = audiblePreparation.packages.filter(pkg => pkg.confirmed).length;
+    io.log(`[AUDIBLES] prepared=${audiblePreparation.packages.length} formation packages confirmed=${confirmedAudibles}${audiblePreparation.gaps.length ? ` gaps=${audiblePreparation.gaps.length}` : ''}`);
     io.log('[COORD] Waiting for live coord.state telemetry...');
 
     for await (const event of sdk.followEvents(client, { after, pollMs: config.pollMs || 250, signal })) {
