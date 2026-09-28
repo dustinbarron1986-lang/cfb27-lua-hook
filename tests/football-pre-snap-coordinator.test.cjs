@@ -14,6 +14,8 @@ const {
   ACTION,
   advisePreSnapCoordinator,
   resolveAudibleCandidates,
+  profileForDefense,
+  rankAudibles,
 } = require('../src/football/recommendation/pre-snap-coordinator');
 const { PerformanceStore } = require('../src/football/memory/performance-store');
 
@@ -163,7 +165,7 @@ test('STAY is preferred when the current play already structurally answers the l
 
 test('pressure can produce an RB/TE pass-pro recommendation without inventing a rusher count', () => {
   const book = playbook();
-  const selected = book.plays.find(x => x.id === 'a4');
+  const selected = { ...book.plays.find(x => x.id === 'a4'), name: 'Dig', concepts: ['dig'] };
   const pkg = new AudiblePackageStore().ensurePackage(book, 'Gun Ace');
   const result = advisePreSnapCoordinator({
     selectedPlay: selected,
@@ -171,7 +173,7 @@ test('pressure can produce an RB/TE pass-pro recommendation without inventing a 
     playbook: book,
     situation: { down: 2, distance: 8 },
     audiblePackage: pkg,
-    authoritativeKnowledge: authoritative({ withBack: true, routes: ['go', 'post'] }),
+    authoritativeKnowledge: authoritative({ withBack: true, routes: ['dig', 'post'] }),
   });
   assert.equal(result.decision, ACTION.PROTECTION);
   assert.match(result.action.label, /PASS PRO/);
@@ -194,24 +196,22 @@ test('hot route requires meaningful structural improvement when no protector is 
   if (result.decision === ACTION.HOT_ROUTE) assert.ok(result.finalGrade.structuralScore > result.baseGrade.structuralScore);
 });
 
-test('combined protection plus hot route never hot-routes the required blocker', () => {
+test('combined protection plus hot route regrades the play and never hot-routes the required blocker', () => {
   const book = playbook();
   const selected = { ...book.plays.find(x => x.id === 'a4'), concepts: ['four_verticals'] };
   const pkg = new AudiblePackageStore().ensurePackage(book, 'Gun Ace');
   const result = advisePreSnapCoordinator({
     selectedPlay: selected,
-    defensiveCall: defense('Zero Blitz', 'Nickel 2-4 Dbl Mug', 'cover_0'),
+    defensiveCall: defense('Mid Blitz', 'Nickel 2-4 Dbl Mug', 'cover_1'),
     playbook: book,
     situation: { down: 3, distance: 6 },
     audiblePackage: pkg,
     authoritativeKnowledge: authoritative({ withBack: true, routes: ['go', 'go'] }),
   });
-  if (result.decision === ACTION.PROTECTION_HOT_ROUTE) {
-    assert.notEqual(result.action.protectorPlayerIndex, result.action.hotRoutePlayerIndex);
-    assert.notEqual(result.bestBet?.playerIndex, result.action.protectorPlayerIndex);
-  } else {
-    assert.notEqual(result.action?.type, 'HOT_ROUTE_BLOCKER');
-  }
+  assert.equal(result.decision, ACTION.PROTECTION_HOT_ROUTE);
+  assert.notEqual(result.action.protectorPlayerIndex, result.action.hotRoutePlayerIndex);
+  assert.notEqual(result.bestBet?.playerIndex, result.action.protectorPlayerIndex);
+  assert.ok(result.finalGrade.structuralScore > result.baseGrade.structuralScore);
 });
 
 test('audible selection only evaluates the four current-formation slots', () => {
@@ -252,34 +252,40 @@ test('structural validity is never overridden by irrelevant historical success',
   if (result.decision === ACTION.AUDIBLE) assert.notEqual(String(result.action.play.id), String(run.id));
 });
 
-test('historical performance can rank structurally valid audible candidates', () => {
+test('historical performance ranks structurally equivalent valid audible candidates', () => {
   const book = playbook();
   const store = new PerformanceStore();
   const slants = book.plays.find(x => x.id === 'a2');
-  const screen = book.plays.find(x => x.id === 'a5');
+  const stick = play('a6', 'Stick', 'Gun Ace', 'PASS', ['stick']);
+  book.plays.push(stick);
   for (let i = 0; i < 4; i += 1) store.record(eventFor(slants, false));
-  for (let i = 0; i < 4; i += 1) store.record(eventFor(screen, true));
+  for (let i = 0; i < 4; i += 1) store.record(eventFor(stick, true));
+  const defensiveCall = defense('Mid Blitz');
   const pkg = {
     available: true,
     playbookId: book.id,
     formation: 'Gun Ace',
     slots: [
       { slot: 'AUDIBLE_1', playId: 'a2', playName: 'Slants', formation: 'Gun Ace', role: 'quick_horizontal' },
-      { slot: 'AUDIBLE_2', playId: 'a5', playName: 'HB Screen', formation: 'Gun Ace', role: 'screen' },
+      { slot: 'AUDIBLE_2', playId: 'a6', playName: 'Stick', formation: 'Gun Ace', role: 'quick_horizontal' },
       { slot: 'AUDIBLE_3', playId: 'a3', playName: 'Sail', formation: 'Gun Ace', role: 'flood' },
       { slot: 'AUDIBLE_4', playId: 'a4', playName: 'Four Verticals', formation: 'Gun Ace', role: 'vertical' },
     ],
   };
-  const result = advisePreSnapCoordinator({
-    selectedPlay: { ...book.plays.find(x => x.id === 'a1'), concepts: [] },
-    defensiveCall: defense('Mid Blitz'),
-    playbook: book,
-    situation: { down: 3, distance: 10, yardLine: 40 },
+  const rows = rankAudibles({
     audiblePackage: pkg,
-    authoritativeKnowledge: authoritative({ withBack: false, routes: [] }),
+    playbook: book,
+    formation: 'Gun Ace',
+    defenseProfile: profileForDefense(defensiveCall, null),
+    knowledge: null,
+    situation: { down: 3, distance: 10, yardLine: 40 },
     performanceStore: store,
+    defensiveCall,
   });
-  if (result.decision === ACTION.AUDIBLE) assert.notEqual(result.action.play.name, 'Slants');
+  const quickRows = rows.filter(row => ['a2', 'a6'].includes(String(row.play.id)));
+  assert.equal(quickRows.length, 2);
+  assert.equal(quickRows[0].play.name, 'Stick');
+  assert.ok(quickRows.every(row => row.grade.valid));
 });
 
 test('Best Bet exposes structured callout data only when evidence is sufficient', () => {
