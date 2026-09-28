@@ -79,7 +79,7 @@ class KnowledgeEngine {
     if (/\bcover\s*1\b|\b1\s*robber\b|\bman\s*free\b/.test(n)) return "cover_1";
     if (/\bcover\s*6\b|\bquarter\s*quarter\s*half\b/.test(n)) return "cover_6";
     if (/\bcover\s*4\b|\bquarters\b/.test(n)) return "cover_4";
-    if (/\bcover\s*3\b|\b3\s*(sky|buzz|cloud)\b/.test(n)) return "cover_3";
+    if (/\bcover\s*3\b|\b3\s+(?:double\s+)?(?:sky|buzz|cloud)\b/.test(n)) return "cover_3";
     if (/\bcover\s*2\b|\b2\s*zone\b/.test(n)) return "cover_2";
     return null;
   }
