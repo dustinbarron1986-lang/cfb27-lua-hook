@@ -12,4 +12,6 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: node --test tests/football-pre-snap-audible.test.cjs tests/football-defensive-recommendation.test.cjs tests/football-coordinator-window-ui.test.cjs
+      - run: node --test tests/football-pre-snap-audible.test.cjs
+      - run: node --test --test-name-pattern="unknown-concept cold start|defensive family repetition|strong situation evidence|unknown-concept defensive ranking|repetition penalty works|unknown offensive play degrades gracefully" tests/football-defensive-recommendation.test.cjs
+      - run: node --test --test-name-pattern="showSelection preserves|render\(\) shows audible|titleForPhase maps|render\(\) sets the in-page" tests/football-coordinator-window-ui.test.cjs
