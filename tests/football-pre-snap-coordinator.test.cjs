@@ -67,6 +67,13 @@ function authoritative({ withBack = true, routes = ['go', 'dig'] } = {}) {
       })),
     },
     receiverButtons: [],
+    derivedProgression: {
+      reads: routeTargets.map((target, index) => ({
+        number: String(index + 1),
+        playerIndex: target.playerIndex,
+        playerLabel: target.playerLabel,
+      })),
+    },
   };
 }
 
@@ -308,6 +315,7 @@ test('Best Bet exposes structured callout data only when evidence is sufficient'
   });
   assert.equal(strong.bestBet?.calloutType, 'BEST_BET');
   assert.ok(strong.bestBet?.player);
+  assert.ok(strong.bestBet?.playArtNumber);
   assert.ok(strong.bestBet?.route);
   assert.ok(strong.bestBet?.reason);
   assert.ok(strong.bestBet?.source);

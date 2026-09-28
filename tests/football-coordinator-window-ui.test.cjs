@@ -360,12 +360,13 @@ test('render() shows the unified pre-snap action and Best Bet on the existing ex
       decision: 'PROTECTION',
       action: { label: 'KEEP PLAY — HB PASS PRO' },
       reasons: ['Pressure is identified and the HB can stay in.'],
-      bestBet: { player: 'X', route: 'Slant', reason: 'Structural pressure answer.' },
+      bestBet: { player: 'POSITION_WR', playArtNumber: '2', route: 'Slant', reason: 'Structural pressure answer.' },
     },
     guide: null,
   });
   const html = elements.get('detail').innerHTML;
   assert.match(html, /ACTION: KEEP PLAY — HB PASS PRO/);
   assert.match(html, /BEST BET:/);
-  assert.match(html, /X — Slant/);
+  assert.match(html, /#2/);
+  assert.match(html, /POSITION_WR — Slant/);
 });

@@ -104,11 +104,14 @@ function gradePlay({ play, structure, defenseProfile, knowledge, situation, perf
 function authoritativeRoutes(authoritativeKnowledge) {
   const structure = authoritativeKnowledge?.authoritative || null;
   const buttons = authoritativeKnowledge?.receiverButtons || [];
+  const reads = authoritativeKnowledge?.derivedProgression?.reads || [];
   return (structure?.routeTargets || []).map(target => {
     const button = buttons.find(row => Number(row.playerIndex) === Number(target.playerIndex))?.button || null;
+    const read = reads.find(row => Number(row.playerIndex) === Number(target.playerIndex)) || null;
     return {
       ...target,
       button,
+      playArtNumber: read?.button || read?.number || null,
       player: target.playerLabel || button || ('player ' + String(Number(target.playerIndex) + 1)),
     };
   });
@@ -247,6 +250,7 @@ function bestBetFor({ authoritativeKnowledge, defenseProfile, protectedIndexes =
     calloutType: 'BEST_BET',
     player: best.target.button || best.target.player,
     playerIndex: best.target.playerIndex,
+    playArtNumber: best.target.playArtNumber || null,
     route: friendly(best.routeName) || best.routeName,
     reason,
     confidence: best.overridden ? 'MEDIUM' : 'MEDIUM',
@@ -378,9 +382,11 @@ function advisePreSnapCoordinator({
     return makeResult({
       action: {
         type: ACTION.HOT_ROUTE,
-        label: 'HOT ROUTE ' + (hot.target.button || hot.target.player) + ' → ' + hot.menu.route,
+        label: 'HOT ROUTE ' + (hot.target.playArtNumber ? '#' + hot.target.playArtNumber + ' ' : '') +
+          (hot.target.button || hot.target.player) + ' → ' + hot.menu.route,
         player: hot.target.button || hot.target.player,
         playerIndex: hot.target.playerIndex,
+        playArtNumber: hot.target.playArtNumber || null,
         route: hot.menu.route,
       },
       baseGrade,
@@ -419,11 +425,13 @@ function advisePreSnapCoordinator({
         action: {
           type: ACTION.PROTECTION_HOT_ROUTE,
           label: 'KEEP PLAY — ' + protector.player + ' PASS PRO; HOT ROUTE ' +
+            (combinedHot.target.playArtNumber ? '#' + combinedHot.target.playArtNumber + ' ' : '') +
             (combinedHot.target.button || combinedHot.target.player) + ' → ' + combinedHot.menu.route,
           protector: protector.player,
           protectorPlayerIndex: protector.playerIndex,
           hotRoutePlayer: combinedHot.target.button || combinedHot.target.player,
           hotRoutePlayerIndex: combinedHot.target.playerIndex,
+          hotRoutePlayArtNumber: combinedHot.target.playArtNumber || null,
           route: combinedHot.menu.route,
         },
         baseGrade,

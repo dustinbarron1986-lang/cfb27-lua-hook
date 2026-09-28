@@ -442,7 +442,9 @@ function renderPreSnapRecommendation(preSnap) {
   const reasons = preSnap.reasons || [];
   const why = reasons.length ? '<div class="guideText"><b>WHY:</b> ' + esc(reasons[0]) + '</div>' : '';
   const best = preSnap.bestBet
-    ? '<div class="guideText" style="margin-top:6px"><b>BEST BET:</b> ' + esc(preSnap.bestBet.player) + ' — ' + esc(preSnap.bestBet.route) + '<br>' + esc(preSnap.bestBet.reason) + '</div>'
+    ? '<div class="guideText" style="margin-top:6px"><b>BEST BET:</b> ' +
+      (preSnap.bestBet.playArtNumber ? '<b>#' + esc(preSnap.bestBet.playArtNumber) + '</b> ' : '') +
+      esc(preSnap.bestBet.player) + ' — ' + esc(preSnap.bestBet.route) + '<br>' + esc(preSnap.bestBet.reason) + '</div>'
     : '';
   return '<div class="plainCallout"><b>ACTION: ' + esc(action.label || preSnap.decision || 'KEEP PLAY') + '</b>' + why + best + '</div>';
 }
