@@ -1,4 +1,5 @@
 const { isDefensivelyEligible, categorizeDefensivePlay } = require("./defensive-eligibility");
+const { evaluateDefensiveCandidate } = require("./counter-model");
 
 function normalizePlaybook(playbook) {
   if (Array.isArray(playbook)) return playbook;
@@ -159,16 +160,31 @@ function theoryScore(knowledge, offensePlay, defensePlay) {
 }
 
 class DefensiveSelectionEngine {
-  constructor({ store, knowledge }) {
+  constructor({ store, knowledge, tendencies = null, recommendationHistory = null }) {
     this.store = store;
     this.knowledge = knowledge;
+    this.tendencies = tendencies;
+    this.recommendationHistory = recommendationHistory;
   }
 
   rank({ playbook, offensePlay, situation, limit = 5 }) {
     const allPlays = normalizePlaybook(playbook);
     const events = this.store.getAll();
+    const threatProfile = this.tendencies
+      ? this.tendencies.recentOffensiveThreats(offensePlay, {
+          authoritativeStructure: offensePlay?.authoritativeStructure || null,
+        })
+      : { current: offensePlay?.structural || null, signals: [], scores: {}, primary: null };
 
-    const candidatePool = { total: allPlays.length, eligible: 0, excludedSpecialTeams: 0, excludedSituational: 0, excludedUnknown: 0 };
+    const candidatePool = {
+      total: allPlays.length,
+      eligible: 0,
+      excludedSpecialTeams: 0,
+      excludedSituational: 0,
+      excludedUnknown: 0,
+      situationEligible: 0,
+      counterEligible: 0,
+    };
     const plays = allPlays.filter(play => {
       if (isDefensivelyEligible(play, situation)) {
         candidatePool.eligible += 1;
@@ -193,7 +209,13 @@ class DefensiveSelectionEngine {
       if (family) lastUsedFamilyIndex.set(family, index);
     });
 
-    const ranked = plays.map(play => {
+    const evaluated = plays.map(play => {
+      const counter = evaluateDefensiveCandidate({
+        profile: threatProfile,
+        play,
+        knowledge: this.knowledge,
+        situation,
+      });
       const theory = theoryScore(this.knowledge, offensePlay, play);
       const exactMatchup = this.store.summarizeMatchup(offensePlay?.id, play.id);
       const contextualMatchup = this.store.summarizeMatchup(offensePlay?.id, play.id, situation);
@@ -215,30 +237,36 @@ class DefensiveSelectionEngine {
       // Exact matchup evidence is most specific. Family evidence fills the gap,
       // while football theory is only a bootstrap prior for sparse observations.
       const empiricalCoverage = clamp(Math.max(reliability, familyReliability * 0.8), 0, 1);
-      const bootstrapTheory = theory.score * (1 - empiricalCoverage);
-      const observedMatchup = empirical.rawScore * reliability;
-      const observedContext = contextualEmpirical.rawScore * contextualReliability * 0.75;
-      const familyBackfillWeight = (1 - reliability) * familyReliability * 0.85;
+      // Counter fit and the situation gate define the valid answer set.
+      // Historical success remains useful only inside that set.
+      const bootstrapTheory = theory.score * (1 - empiricalCoverage) * 0.30;
+      const observedMatchup = empirical.rawScore * reliability * 0.50;
+      const observedContext = contextualEmpirical.rawScore * contextualReliability * 0.35;
+      const familyBackfillWeight = (1 - reliability) * familyReliability * 0.35;
       const observedFamilyMatchup = familyEmpirical.rawScore * familyBackfillWeight;
-      const observedFamilyContext = contextualFamilyEmpirical.rawScore * (1 - contextualReliability) * contextualFamilyReliability * 0.55;
+      const observedFamilyContext = contextualFamilyEmpirical.rawScore * (1 - contextualReliability) * contextualFamilyReliability * 0.25;
 
       let execution = 0;
       const executionReasons = [];
       if (overallDefense.attempts >= 3 && overallDefense.defensiveSuccessRate != null) {
-        execution += (overallDefense.defensiveSuccessRate - 0.5) * 1.5;
-        if (overallDefense.avgYards != null) execution += clamp((4.5 - overallDefense.avgYards) * 0.08, -0.5, 0.5);
+        execution += (overallDefense.defensiveSuccessRate - 0.5) * 0.8;
+        if (overallDefense.avgYards != null) execution += clamp((4.5 - overallDefense.avgYards) * 0.05, -0.3, 0.3);
         executionReasons.push(`this defense has ${Math.round(overallDefense.defensiveSuccessRate * 100)}% observed success overall`);
       }
 
       const situationPart = defensiveSituationScore(play, situation);
-      const repetition = recentDefenseRepetitionPenalty(events, play);
-      const familyRepetition = recentDefenseFamilyRepetitionPenalty(events, this.knowledge, defenseFamilyKey);
+      const repetition = recentDefenseRepetitionPenalty(events, play) * 0.35;
+      const familyRepetition = recentDefenseFamilyRepetitionPenalty(events, this.knowledge, defenseFamilyKey) * 0.35;
+      const recommendationPenalty = this.recommendationHistory
+        ? this.recommendationHistory.penalty("defense", play, defenseFamilyKey)
+        : { score: 0, reasons: [], exactHits: 0, familyHits: 0 };
       const lastUsedAt = lastUsedIndex.has(String(play.id)) ? lastUsedIndex.get(String(play.id)) : -1;
       const lastFamilyUsedAt = defenseFamilyKey && lastUsedFamilyIndex.has(defenseFamilyKey)
         ? lastUsedFamilyIndex.get(defenseFamilyKey)
         : -1;
 
       const components = {
+        counterFit: counter.score,
         bootstrapTheory,
         structuralPrior: structuralPrior.score,
         observedExactMatchup: observedMatchup,
@@ -248,17 +276,20 @@ class DefensiveSelectionEngine {
         observedExecution: execution,
         situation: situationPart.score,
         repetition,
-        familyRepetition
+        familyRepetition,
+        recommendationRepetition: recommendationPenalty.score,
       };
 
       const total = Object.values(components).reduce((a,b) => a + b, 0);
       const reasons = [
+        ...counter.reasons,
         ...theory.reasons,
         ...empirical.reasons.map(r => `exact empirical matchup: ${r}`),
         ...contextualEmpirical.reasons.map(r => `exact same-situation matchup: ${r}`),
         ...familyEmpirical.reasons.map(r => `family empirical matchup: ${r}`),
         ...contextualFamilyEmpirical.reasons.map(r => `family same-situation matchup: ${r}`),
         ...executionReasons,
+        ...recommendationPenalty.reasons,
         ...structuralPrior.reasons,
         ...situationPart.reasons
       ];
@@ -269,6 +300,7 @@ class DefensiveSelectionEngine {
         components,
         reasons,
         exactOffense: offensePlay,
+        threatProfile,
         diagnostic: {
           side: "defense",
           playId: play.id,
@@ -276,39 +308,54 @@ class DefensiveSelectionEngine {
           exactOffense: offensePlay,
           offenseFamily: offenseFamilyKey,
           defenseFamily: defenseFamilyKey,
+          threatProfile,
+          counter,
           empiricalReliability: Number(reliability.toFixed(3)),
           familyReliability: Number(familyReliability.toFixed(3)),
-          theoryWeight: Number((1 - empiricalCoverage).toFixed(3)),
+          theoryWeight: Number(((1 - empiricalCoverage) * 0.30).toFixed(3)),
           exactMatchup,
           sameSituationMatchup: contextualMatchup,
           familyMatchup,
           familySituationMatchup: contextualFamilyMatchup,
           overallDefense,
+          recommendationExposure: recommendationPenalty,
           totalComponents: components,
           lastUsedAt,
           lastFamilyUsedAt
         },
-        selectionPolicy: "exact_offense_oracle_with_empirical_override"
+        selectionPolicy: "exact_offense_oracle_counter_first"
       };
-    }).sort((a, b) => {
+    });
+
+    const situationValid = evaluated.filter(row => row.diagnostic.counter?.gate?.valid !== false);
+    const counterValid = situationValid.filter(row => row.diagnostic.counter?.valid === true);
+    candidatePool.situationEligible = situationValid.length;
+    candidatePool.counterEligible = counterValid.length;
+
+    // If the structural taxonomy cannot distinguish any candidate, preserve
+    // the hard situation gate and degrade honestly to that situation-valid pool.
+    const pool = counterValid.length ? counterValid : situationValid;
+    const ranked = pool.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
-      // Genuine score tie: prefer the least recently ACTUALLY used defensive
-      // family, then the least recently used exact call. This is deterministic
-      // predictability control, not a diversity mandate; the family penalty
-      // above is intentionally small enough for stronger football evidence to win.
       if (a.diagnostic.lastFamilyUsedAt !== b.diagnostic.lastFamilyUsedAt) {
         return a.diagnostic.lastFamilyUsedAt - b.diagnostic.lastFamilyUsedAt;
       }
-      return a.diagnostic.lastUsedAt - b.diagnostic.lastUsedAt;
+      if (a.diagnostic.lastUsedAt !== b.diagnostic.lastUsedAt) {
+        return a.diagnostic.lastUsedAt - b.diagnostic.lastUsedAt;
+      }
+      return String(a.play?.id || a.play?.name || "").localeCompare(String(b.play?.id || b.play?.name || ""));
     });
 
     return {
       situation,
       exactOffense: offensePlay,
+      threatProfile,
       recommendations: ranked.slice(0, limit),
-      evaluated: ranked.length,
+      evaluated: evaluated.length,
+      strategicEligible: pool.length,
       candidatePool,
-      learningPolicy: "bootstrap football theory fades as observed exact-play and play-family matchup samples grow"
+      learningPolicy: "opponent structure and situation gate the candidate set before empirical response success ranks valid counters",
+      selectionPolicy: "exact_offense_oracle_counter_first",
     };
   }
 }
