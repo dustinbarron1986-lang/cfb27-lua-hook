@@ -278,7 +278,7 @@ test('historical performance ranks structurally equivalent valid audible candida
     formation: 'Gun Ace',
     defenseProfile: profileForDefense(defensiveCall, null),
     knowledge: null,
-    situation: { down: 3, distance: 10, yardLine: 40 },
+    situation: { down: 2, distance: 7, yardLine: 40 },
     performanceStore: store,
     defensiveCall,
   });
