@@ -17,7 +17,7 @@ function routeTraits(target) {
   if (/corner/.test(raw)) add('corner', 'out_break', 'deep');
   if (/out/.test(raw)) add('out', 'out_break');
   if (/flat|swing|arrow/.test(raw)) add('flat', 'underneath', 'quick');
-  if (/curl|hook|hitch|comeback/.test(raw)) add('stop', 'underneath');
+  if (/curl|hook|hitch|comeback|stick/.test(raw)) add('stop', 'underneath');
   if (/streak|vertical|seam|go/.test(raw)) add('vertical', 'deep');
   if (/wheel/.test(raw)) add('wheel', 'deep');
   if (/whip|pivot|choice|option/.test(raw)) add('choice', 'separator');
@@ -86,6 +86,103 @@ function friendlyRoute(target) {
   return String(raw).replace(/^AssignRouteType_/i, '').replace(/^RR_/i, '').replaceAll('_', ' ').trim();
 }
 
+function sideOf(target) {
+  const x = Number(target?.startX ?? target?.geometry?.start?.x);
+  if (!Number.isFinite(x) || Math.abs(x) < 1) return 'middle';
+  return x < 0 ? 'left' : 'right';
+}
+
+function enrichedTargets(targets, coverage, pressure) {
+  return targets.map(target => ({
+    target,
+    side: sideOf(target),
+    ...scoreTarget(target, coverage, pressure),
+  }));
+}
+
+function firstWith(items, trait) {
+  return items.find(item => item.traits.traits.has(trait)) || null;
+}
+
+function sameSide(items, side) {
+  return items.filter(item => item.side === side || item.side === 'middle');
+}
+
+function detectRelationship(items) {
+  const left = items.filter(item => item.side === 'left');
+  const right = items.filter(item => item.side === 'right');
+  for (const group of [left, right]) {
+    const side = group[0]?.side;
+    if (!side) continue;
+    const flat = firstWith(group, 'flat');
+    const outBreaker = group.find(item => item.traits.traits.has('out_break') && !item.traits.traits.has('flat'));
+    const deep = group.find(item => item.traits.traits.has('deep'));
+    if (flat && outBreaker && deep && new Set([flat, outBreaker, deep]).size === 3) {
+      return { family: 'flood', keyDefender: 'curl-flat / overhang defender', order: [flat, outBreaker, deep] };
+    }
+
+    const stop = firstWith(group, 'stop');
+    const corner = firstWith(group, 'corner');
+    if (stop && corner) return { family: 'smash', keyDefender: 'corner/flat defender', order: [stop, corner] };
+
+    if (flat && stop) return { family: 'stick_flat', keyDefender: 'flat / overhang defender', order: [flat, stop] };
+  }
+
+  const crossers = items.filter(item => item.traits.traits.has('cross'));
+  if (crossers.length >= 2 && new Set(crossers.map(item => item.side)).size >= 2) {
+    return { family: 'mesh', keyDefender: 'first underneath defender carrying a crosser', order: crossers };
+  }
+
+  const shallow = crossers.find(item => item.traits.traits.has('underneath'));
+  const dig = firstWith(items, 'dig');
+  if (shallow && dig) return { family: 'drive', keyDefender: 'hook/curl defender between the shallow and dig', order: [shallow, dig] };
+
+  const vertical = firstWith(items, 'vertical');
+  if (vertical && dig) return { family: 'dagger', keyDefender: 'inside hook/safety leverage on the dig', order: [dig, vertical] };
+
+  const inBreaks = items.filter(item => item.traits.traits.has('in_break'));
+  if (inBreaks.length >= 2) {
+    const depths = inBreaks.map(item => item.traits.depth ?? 0).sort((a, b) => a - b);
+    if ((depths.at(-1) || 0) - (depths[0] || 0) >= 4) {
+      return { family: 'levels', keyDefender: 'inside hook defender stretched between levels', order: [...inBreaks].sort((a,b)=>(a.traits.depth??0)-(b.traits.depth??0)) };
+    }
+  }
+
+  return null;
+}
+
+function outletCandidate(items, used = new Set()) {
+  return items
+    .filter(item => !used.has(item))
+    .filter(item => item.traits.traits.has('underneath') || item.traits.traits.has('flat'))
+    .sort((a, b) => (a.traits.cost ?? 999) - (b.traits.cost ?? 999))[0] || null;
+}
+
+function alertCandidate(items, used = new Set()) {
+  const counts = items.reduce((map, item) => map.set(item.side, (map.get(item.side) || 0) + 1), new Map());
+  return items
+    .filter(item => !used.has(item))
+    .filter(item => item.traits.traits.has('deep') || item.traits.traits.has('post') || item.traits.traits.has('vertical'))
+    .find(item => item.side !== 'middle' && counts.get(item.side) === 1) || null;
+}
+
+function readRow(item, index, relationship) {
+  return {
+    number: String(index + 1),
+    button: item.target.button || null,
+    label: `${friendlyRoute(item.target)} — ${item.timing} window`,
+    detail: item.reasons.length
+      ? item.reasons.join('; ')
+      : `${relationship ? relationship.replaceAll('_', ' ') + ' structural' : 'structural'} ${item.timing} read from decoded EA route geometry`,
+    score: Number(item.score.toFixed(3)),
+    timing: item.timing,
+    assignmentId: item.target.assignmentId ?? null,
+    assignmentName: item.target.assignmentName || null,
+    playerIndex: item.target.playerIndex ?? null,
+    playerLabel: item.target.playerLabel || null,
+  };
+}
+
 function deriveStructuralProgression({ playArt, coverage = null, pressure = false } = {}) {
   const targets = playArt?.targets || [];
   if (targets.length < 2) {
@@ -98,33 +195,49 @@ function deriveStructuralProgression({ playArt, coverage = null, pressure = fals
     };
   }
 
-  const ranked = targets
-    .map(target => ({ target, ...scoreTarget(target, coverage, pressure) }))
-    .sort((a, b) => b.score - a.score || (a.traits.cost ?? 999) - (b.traits.cost ?? 999));
+  const items = enrichedTargets(targets, coverage, pressure);
+  const relationship = detectRelationship(items);
+  let ordered;
 
-  const reads = ranked.map((item, index) => ({
-    number: String(index + 1),
-    button: item.target.button || null,
-    label: `${friendlyRoute(item.target)} — ${item.timing} window`,
-    detail: item.reasons.length
-      ? item.reasons.join('; ')
-      : `structural ${item.timing} read based on decoded route geometry`,
-    score: Number(item.score.toFixed(3)),
-    timing: item.timing,
-    assignmentId: item.target.assignmentId ?? null,
-    assignmentName: item.target.assignmentName || null,
-  }));
+  if (relationship) {
+    const structural = relationship.order.filter(Boolean);
+    const used = new Set(structural);
+    const remainder = items
+      .filter(item => !used.has(item))
+      .sort((a, b) => b.score - a.score || (a.traits.cost ?? 999) - (b.traits.cost ?? 999));
+    ordered = [...structural, ...remainder];
+  } else {
+    ordered = [...items].sort((a, b) => b.score - a.score || (a.traits.cost ?? 999) - (b.traits.cost ?? 999));
+  }
+
+  const used = new Set((relationship?.order || []).filter(Boolean));
+  const outlet = outletCandidate(items, used);
+  const alert = alertCandidate(items, used);
+  const reads = ordered.map((item, index) => readRow(item, index, relationship?.family || null));
 
   return {
     available: true,
     status: 'derived_structural',
     provenance: 'coordinator_derived_from_ea_assignments',
+    relationship: relationship?.family || (items.length >= 3 ? 'multi_route_structure' : 'two_route_structure'),
+    keyDefenderRole: relationship?.keyDefender || 'defender whose leverage changes the relationship between the first two routes',
+    alert: alert ? {
+      label: friendlyRoute(alert.target),
+      assignmentId: alert.target.assignmentId ?? null,
+      playerLabel: alert.target.playerLabel || null,
+    } : null,
+    outlet: outlet ? {
+      label: friendlyRoute(outlet.target),
+      assignmentId: outlet.target.assignmentId ?? null,
+      playerLabel: outlet.target.playerLabel || null,
+    } : null,
     coverage: coverage || null,
     pressure: Boolean(pressure),
     timingCalibrated: false,
+    ambiguous: !relationship,
     reads,
-    warning: 'This is a coordinator-derived structural read order, not an EA-authored progression. Route timing is relative until telemetry calibration is complete.',
+    warning: 'Coordinator-derived structural read order from EA-authored assignments; EA does not author this read order here. Route timing is relative until telemetry calibration is complete.',
   };
 }
 
-module.exports = { deriveStructuralProgression, routeTraits, scoreTarget };
+module.exports = { deriveStructuralProgression, routeTraits, scoreTarget, detectRelationship };
