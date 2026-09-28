@@ -87,6 +87,30 @@ function situationFromState(state) {
   return base;
 }
 
+const ORACLE_CHANGE_THRESHOLD = 0.85;
+
+function isOffensiveScrimmageSituation(state) {
+  if (Number(state?.possession) !== 0) return false;
+  const down = Number(state?.down);
+  const distance = Number(state?.distance);
+  const fieldX = Number(state?.fieldX);
+  const lineToGain = Number(state?.lineToGain);
+  if (!Number.isFinite(down) || down < 1 || down > 4) return false;
+  if (!Number.isFinite(distance) || distance < 0) return false;
+  if (!Number.isFinite(fieldX) || !Number.isFinite(lineToGain)) return false;
+
+  // A real scrimmage huddle has a meaningful line-to-gain geometry. This
+  // prevents the kickoff/return transition from manufacturing an offensive
+  // call before the first true down is established.
+  const geometricDistance = Math.abs(lineToGain - fieldX);
+  if (geometricDistance < 0.5) return false;
+  if (distance > 0) {
+    const tolerance = Math.max(2.5, distance * 0.35);
+    if (Math.abs(geometricDistance - distance) > tolerance) return false;
+  }
+  return true;
+}
+
 function exactDefenseFromState(engine, state, fresh = null) {
   if (state?.possession !== 0 || fresh?.defense !== true) return null;
   const call = callFromState(state, 'defense');
@@ -103,12 +127,89 @@ function exactDefenseFromState(engine, state, fresh = null) {
   };
 }
 
-function printRecommendation(engine, playbooks, state, io, coordinatorWindow, exactDefense = null) {
-  if (state.possession !== 0) return;
+function samePlay(a, b) {
+  if (!a || !b) return false;
+  if (a.id != null && b.id != null && String(a.id) === String(b.id)) return true;
+  return String(a.name || '') === String(b.name || '') &&
+    String(a.formation || '') === String(b.formation || '');
+}
+
+function initialCoordinatorPlay(playbooks, coordinatorWindow) {
+  const state = coordinatorWindow?.state || {};
+  const plays = playbooks?.offense?.plays || [];
+  if (state.coordinatorPlayId != null) {
+    const byId = plays.find(play => String(play.id) === String(state.coordinatorPlayId));
+    if (byId) return byId;
+  }
+  if (state.coordinatorCall) {
+    return plays.find(play =>
+      String(play.name || '') === String(state.coordinatorCall) &&
+      (!state.coordinatorFormation || String(play.formation || '') === String(state.coordinatorFormation))
+    ) || null;
+  }
+  return null;
+}
+
+function decideOracleRecommendation(initialPlay, ranked, threshold = ORACLE_CHANGE_THRESHOLD) {
+  const candidates = ranked?.strategicCandidates || ranked?.recommendations || [];
+  const best = candidates[0] || null;
+  if (!initialPlay || !best) {
+    return {
+      decision: 'KEEP',
+      play: initialPlay || best?.play || null,
+      replacement: null,
+      scoreDelta: 0,
+      reason: 'No materially better exact-defense alternative is available.',
+    };
+  }
+
+  const initial = candidates.find(row => samePlay(row.play, initialPlay)) || null;
+  if (!initial) {
+    return {
+      decision: 'CHANGE',
+      play: initialPlay,
+      replacement: best.play,
+      scoreDelta: null,
+      reason: 'The initial call is outside the exact-defense football-valid counter set.',
+    };
+  }
+
+  if (samePlay(best.play, initialPlay)) {
+    return {
+      decision: 'KEEP',
+      play: initialPlay,
+      replacement: null,
+      scoreDelta: 0,
+      reason: 'The initial call remains the best exact counter to the revealed defense.',
+    };
+  }
+
+  const delta = Number(best.score) - Number(initial.score);
+  if (Number.isFinite(delta) && delta >= threshold) {
+    return {
+      decision: 'CHANGE',
+      play: initialPlay,
+      replacement: best.play,
+      scoreDelta: delta,
+      reason: `The revealed defense creates a materially better counter (+${delta.toFixed(2)}).`,
+    };
+  }
+
+  return {
+    decision: 'KEEP',
+    play: initialPlay,
+    replacement: null,
+    scoreDelta: Number.isFinite(delta) ? delta : 0,
+    reason: 'The exact-defense alternative is not materially better than the initial call.',
+  };
+}
+
+function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
+  if (!isOffensiveScrimmageSituation(state)) return null;
   const situation = situationFromState(state);
   const ranked = engine.recommendPlays({
     playbook: playbooks.offense,
-    defensePlay: exactDefense,
+    defensePlay: null,
     situation,
     limit: 3,
   });
@@ -118,7 +219,7 @@ function printRecommendation(engine, playbooks, state, io, coordinatorWindow, ex
       available: false,
       reason: 'No legal recommendation is available.',
     }, state);
-    return;
+    return null;
   }
   coordinatorWindow.showRecommendation({
     available: true,
@@ -129,19 +230,53 @@ function printRecommendation(engine, playbooks, state, io, coordinatorWindow, ex
     reasons: top.reasons?.slice(0, 3) || [],
   }, state);
   engine.recordRecommendation?.('offense', top, {
-    opponentPlay: exactDefense,
+    opponentPlay: null,
     situation,
     family: top.diagnostic?.counter?.structure?.primaryThreat || top.play.primaryConcept || top.play.presentationFamily || null,
   });
   io.log(`\n[OC] ${downText(state.down)} & ${state.distance} | Q${state.quarter} ${fmtClock(state.gameClockSeconds)}`);
-  if (exactDefense) {
-    io.log(`[OC] CPU DEFENSE: ${exactDefense.formation || '?'} / ${exactDefense.name} (${exactDefense.coverageFamily || 'unresolved'})`);
-  }
   io.log(`[OC] CALL: ${top.play.formation || '?'} / ${top.play.name || top.play.id}  score=${top.score}`);
   if (top.reasons?.length) io.log(`[OC] WHY: ${top.reasons.slice(0, 3).join(' | ')}`);
   if (ranked.tendency?.attempts) {
     io.log(`[OC] TENDENCY: ${ranked.tendency.scope}, n=${ranked.tendency.attempts}, confidence=${ranked.tendency.confidence}`);
   }
+  return top;
+}
+
+function printOracleRecommendation(engine, playbooks, state, exactDefense, io, coordinatorWindow) {
+  if (!exactDefense || !isOffensiveScrimmageSituation(state)) return null;
+  const initialPlay = initialCoordinatorPlay(playbooks, coordinatorWindow);
+  if (!initialPlay) return null;
+
+  const ranked = engine.recommendPlays({
+    playbook: playbooks.offense,
+    defensePlay: exactDefense,
+    situation: situationFromState(state),
+    limit: Math.max(3, playbooks.offense?.plays?.length || 3),
+  });
+  const oracle = decideOracleRecommendation(initialPlay, ranked);
+
+  coordinatorWindow.showOracleRecommendation({
+    decision: oracle.decision,
+    initialPlay,
+    play: oracle.replacement || initialPlay,
+    defense: exactDefense,
+    reason: oracle.reason,
+  }, state);
+
+  io.log(`[OC] CPU DEFENSE: ${exactDefense.formation || '?'} / ${exactDefense.name} (${exactDefense.coverageFamily || 'unresolved'})`);
+  if (oracle.decision === 'CHANGE') {
+    io.log(`[OC] ORACLE: CHANGE TO ${oracle.replacement?.formation || '?'} / ${oracle.replacement?.name || oracle.replacement?.id}`);
+    engine.recordRecommendation?.('offense', { play: oracle.replacement }, {
+      opponentPlay: exactDefense,
+      situation: situationFromState(state),
+      family: oracle.replacement?.primaryConcept || oracle.replacement?.presentationFamily || null,
+    });
+  } else {
+    io.log(`[OC] ORACLE: KEEP ${initialPlay.formation || '?'} / ${initialPlay.name || initialPlay.id}`);
+  }
+  io.log(`[OC] ORACLE WHY: ${oracle.reason}`);
+  return oracle;
 }
 
 // Per-side call-generation freshness tracking. A situation boundary snapshots
@@ -449,10 +584,14 @@ function handleNewSituation(engine, playbooks, current, lastSituationKey, situat
     available: false,
     reason: 'New situation detected; recommendation pending.',
   }, current);
-  // Do not recommend offense yet: the exact CPU defensive call at a situation
-  // boundary may still be stale from the prior snap. The main loop waits for
-  // the existing defensive freshness lifecycle before invoking the OC.
-  
+
+  // Stage 1: a real offensive scrimmage huddle gets its coordinator call
+  // immediately. No selected offensive play and no fresh exact defense are
+  // required. Kickoff/return states fail isOffensiveScrimmageSituation().
+  if (isOffensiveScrimmageSituation(current)) {
+    printRecommendation(engine, playbooks, current, io, coordinatorWindow);
+  }
+
   // Snapshot whatever is currently exposed, per side, as the quarantined
   // baseline that updateSideFreshness() must see proof against before either
   // side is allowed to drive execution advice / a defensive recommendation.
@@ -575,13 +714,14 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
 
     let appliedImmediately = false;
     const lastKnownState = getLastKnownState();
-    if (side === 'offense' && lastKnownState && coordinatorWindow.state.phase === 'huddle') {
+    if (side === 'offense' && lastKnownState && isOffensiveScrimmageSituation(lastKnownState)) {
+      const initial = printRecommendation(engine, playbooks, lastKnownState, io, coordinatorWindow);
       const fresh = getFresh();
       const exactDefense = exactDefenseFromState(engine, lastKnownState, fresh);
-      if (exactDefense) {
-        printRecommendation(engine, playbooks, lastKnownState, io, coordinatorWindow, exactDefense);
-        appliedImmediately = true;
+      if (initial && exactDefense) {
+        printOracleRecommendation(engine, playbooks, lastKnownState, exactDefense, io, coordinatorWindow);
       }
+      appliedImmediately = Boolean(initial);
     } else if (side === 'defense' && lastKnownState && coordinatorWindow.state.phase === 'defensive_huddle') {
       const fresh = getFresh();
       if (fresh.offense) {
@@ -619,7 +759,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   const reducer = new SnapReducer();
   let lastSituationKey = null;
   let lastExecutionKey = null;
-  let lastOffensiveRecommendationKey = null;
+  let lastOracleRecommendationKey = null;
   // Diagnostic-only deduplication. This key never participates in freshness,
   // authority resolution, snap detection, performance recording, or advice.
   let lastAuthorityDiagnosticKey = null;
@@ -696,7 +836,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
 
           lastSituationKey = situationKey;
           lastExecutionKey = null;
-          lastOffensiveRecommendationKey = null;
+          lastOracleRecommendationKey = null;
         }
         const previousFresh = fresh;
         ({ fresh, cleared } = updateFreshness(current, quarantine, fresh, cleared));
@@ -729,17 +869,17 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
         );
 
         const exactDefense = exactDefenseFromState(engine, current, fresh);
-        if (current.possession === 0 && exactDefense) {
-          const offensiveRecommendationKey = [
+        if (current.possession === 0 && exactDefense && coordinatorWindow.state.coordinatorCall) {
+          const oracleRecommendationKey = [
             current.quarter,
             current.down,
             current.distance,
             current.fieldX,
             exactDefense.id || exactDefense.name,
           ].join('|');
-          if (offensiveRecommendationKey !== lastOffensiveRecommendationKey) {
-            printRecommendation(engine, playbooks, current, io, coordinatorWindow, exactDefense);
-            lastOffensiveRecommendationKey = offensiveRecommendationKey;
+          if (oracleRecommendationKey !== lastOracleRecommendationKey) {
+            printOracleRecommendation(engine, playbooks, current, exactDefense, io, coordinatorWindow);
+            lastOracleRecommendationKey = oracleRecommendationKey;
           }
         }
 
@@ -795,7 +935,10 @@ module.exports = {
   tailCursor,
   situationFromState,
   snapToFootballEvent,
+  isOffensiveScrimmageSituation,
   printRecommendation,
+  printOracleRecommendation,
+  decideOracleRecommendation,
   exactDefenseFromState,
   printExecutionAdvice,
   printDefensiveRecommendation,
