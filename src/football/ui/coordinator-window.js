@@ -579,6 +579,23 @@ function renderGuide(guide) {
   return '<div class="coachGrid"><div class="diagramCard"><div class="diagramTitle">'+esc(guide.diagramLabel || 'CONCEPT VIEW')+'</div><div class="diagramWrap">'+passDiagram(guide)+'</div></div>' +
     '<div class="guideCard"><div class="guideTitle">'+esc(title)+'</div>'+body+warning+note+'</div></div>';
 }
+function renderOffenseContext(s) {
+  const rows = [];
+  if (s.userCall) {
+    rows.push(detail('USER SELECTED', s.userCall + (s.userFormation ? ' — ' + s.userFormation : '')));
+  }
+  if (s.cpuDefense) {
+    rows.push(detail('CPU DEFENSE', s.cpuDefense + (s.cpuDefenseFormation ? ' — ' + s.cpuDefenseFormation : '')));
+  }
+  if (s.oracleDecision) {
+    const oracleText = s.oracleDecision === 'CHANGE'
+      ? 'CHANGE TO ' + (s.oracleCall || 'better counter') + (s.oracleFormation ? ' — ' + s.oracleFormation : '')
+      : 'KEEP';
+    rows.push(detail('ORACLE', oracleText + (s.oracleReason ? ' — ' + s.oracleReason : '')));
+  }
+  return rows.join('');
+}
+
 function render(s) {
   lastUpdated = s.updatedAt || null;
   els.dot.classList.toggle('on', Boolean(s.connected));
@@ -594,22 +611,30 @@ function render(s) {
   document.title = title;
 
   if (s.phase === 'huddle') {
-    els.eyebrow.textContent = 'CALL';
-    els.play.textContent = s.call || 'NO CALL AVAILABLE';
-    setFormation(s.formation);
-    els.detail.innerHTML = detail('WHY', s.why);
-  } else if (s.phase === 'selected' || s.phase === 'audible') {
-    els.eyebrow.textContent = s.phase === 'audible' ? 'AUDIBLE' : 'YOUR CALL';
-    els.play.textContent = s.call || 'PLAY SELECTED';
-    setFormation(s.formation);
-    if (s.defense) {
+    els.eyebrow.textContent = 'COORDINATOR CALL';
+    els.play.textContent = s.coordinatorCall || s.call || 'NO CALL AVAILABLE';
+    setFormation(s.coordinatorFormation || s.formation);
+    const contextHtml = renderOffenseContext(s);
+    if (contextHtml) {
       els.defense.hidden = false;
-      els.defense.innerHTML = detail('DEFENSE', s.defense + (s.defenseFormation ? ' — ' + s.defenseFormation : ''));
+      els.defense.innerHTML = contextHtml;
+    }
+    els.detail.innerHTML = detail('WHY', s.coordinatorWhy || s.why);
+  } else if (s.phase === 'selected' || s.phase === 'audible') {
+    // The user's selection and execution guide are additive state. They must
+    // never replace the coordinator's Stage-1 recommendation.
+    els.eyebrow.textContent = 'COORDINATOR CALL';
+    els.play.textContent = s.coordinatorCall || s.call || 'NO CALL AVAILABLE';
+    setFormation(s.coordinatorFormation || s.formation);
+    const contextHtml = renderOffenseContext(s);
+    if (contextHtml) {
+      els.defense.hidden = false;
+      els.defense.innerHTML = contextHtml;
     }
     els.detail.className = 'read';
     const guideHtml = renderGuide(s.guide) ||
       detail('READ', Array.isArray(s.read) && s.read.length ? s.read : (s.read || 'No specific adjustment.'));
-    els.detail.innerHTML = guideHtml + renderAudibleRecommendation(s.audibleRecommendation);
+    els.detail.innerHTML = detail('WHY', s.coordinatorWhy) + guideHtml + renderAudibleRecommendation(s.audibleRecommendation);
   } else if (s.phase === 'defensive_huddle') {
     els.eyebrow.textContent = 'DEFENSIVE CALL';
     els.play.textContent = s.call || 'NO CALL AVAILABLE';
@@ -787,6 +812,18 @@ class CoordinatorWindow {
       call: null,
       formation: null,
       why: null,
+      coordinatorPlayId: null,
+      coordinatorCall: null,
+      coordinatorFormation: null,
+      coordinatorWhy: null,
+      userCall: null,
+      userFormation: null,
+      cpuDefense: null,
+      cpuDefenseFormation: null,
+      oracleDecision: null,
+      oracleCall: null,
+      oracleFormation: null,
+      oracleReason: null,
       defense: null,
       defenseFormation: null,
       cpuPlay: null,
@@ -841,12 +878,25 @@ class CoordinatorWindow {
         call: null,
         formation: null,
         why: action?.reason || 'No legal recommendation is available.',
+        coordinatorPlayId: null,
+        coordinatorCall: null,
+        coordinatorFormation: null,
+        coordinatorWhy: null,
+        userCall: null,
+        userFormation: null,
+        cpuDefense: null,
+        cpuDefenseFormation: null,
+        oracleDecision: null,
+        oracleCall: null,
+        oracleFormation: null,
+        oracleReason: null,
         defense: null,
         defenseFormation: null,
         cpuPlay: null,
         cpuFormation: null,
         read: null,
         guide: null,
+        audibleRecommendation: null,
         result: null
       });
     }
@@ -855,6 +905,18 @@ class CoordinatorWindow {
       call: action.play?.name || null,
       formation: action.locator?.formation || action.play?.formation || null,
       why: action.reasons && action.reasons.length ? action.reasons : (action.reason || null),
+      coordinatorPlayId: action.play?.id == null ? null : String(action.play.id),
+      coordinatorCall: action.play?.name || null,
+      coordinatorFormation: action.locator?.formation || action.play?.formation || null,
+      coordinatorWhy: action.reasons && action.reasons.length ? action.reasons : (action.reason || null),
+      userCall: null,
+      userFormation: null,
+      cpuDefense: null,
+      cpuDefenseFormation: null,
+      oracleDecision: null,
+      oracleCall: null,
+      oracleFormation: null,
+      oracleReason: null,
       defense: null,
       defenseFormation: null,
       cpuPlay: null,
@@ -866,11 +928,40 @@ class CoordinatorWindow {
     });
   }
 
+  showOracleRecommendation(action, state) {
+    this.updateSituation(state);
+    const defense = action?.defense || {};
+    const replacement = action?.decision === 'CHANGE' ? action?.play : null;
+    return this._set({
+      cpuDefense: defense.name || null,
+      cpuDefenseFormation: defense.formation || defense.set || null,
+      // Keep legacy fields populated for consumers that still read them.
+      defense: defense.name || null,
+      defenseFormation: defense.formation || defense.set || null,
+      oracleDecision: action?.decision || null,
+      oracleCall: replacement?.name || null,
+      oracleFormation: replacement?.formation || null,
+      oracleReason: action?.reason || null,
+    });
+  }
+
   showDefensiveRecommendation(action, state) {
     this.updateSituation(state);
     if (!action?.available) {
       return this._set({
         phase: 'defensive_unavailable',
+        coordinatorPlayId: null,
+        coordinatorCall: null,
+        coordinatorFormation: null,
+        coordinatorWhy: null,
+        userCall: null,
+        userFormation: null,
+        cpuDefense: null,
+        cpuDefenseFormation: null,
+        oracleDecision: null,
+        oracleCall: null,
+        oracleFormation: null,
+        oracleReason: null,
         cpuPlay: action?.cpuPlay?.name || null,
         cpuFormation: action?.cpuPlay?.formation || null,
         call: null,
@@ -885,6 +976,18 @@ class CoordinatorWindow {
     }
     return this._set({
       phase: 'defensive_huddle',
+      coordinatorPlayId: null,
+      coordinatorCall: null,
+      coordinatorFormation: null,
+      coordinatorWhy: null,
+      userCall: null,
+      userFormation: null,
+      cpuDefense: null,
+      cpuDefenseFormation: null,
+      oracleDecision: null,
+      oracleCall: null,
+      oracleFormation: null,
+      oracleReason: null,
       cpuPlay: action.cpuPlay?.name || null,
       cpuFormation: action.cpuPlay?.formation || null,
       call: action.play?.name || null,
@@ -910,9 +1013,15 @@ class CoordinatorWindow {
     ].filter(Boolean) : [];
     return this._set({
       phase: action?.type === 'audible' ? 'audible' : 'selected',
+      // Preserve legacy call/formation as the user's selected play for existing
+      // consumers, while coordinatorCall/coordinatorFormation remain stable.
       call: action?.play?.name || null,
       formation: action?.play?.formation || null,
       why: null,
+      userCall: action?.play?.name || null,
+      userFormation: action?.play?.formation || null,
+      cpuDefense: action?.opponentPlay?.name || this.state.cpuDefense || null,
+      cpuDefenseFormation: action?.opponentPlay?.formation || this.state.cpuDefenseFormation || null,
       defense: action?.opponentPlay?.name || null,
       defenseFormation: action?.opponentPlay?.formation || null,
       cpuPlay: null,
