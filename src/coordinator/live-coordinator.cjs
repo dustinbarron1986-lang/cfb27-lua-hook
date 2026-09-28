@@ -283,6 +283,11 @@ function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coor
   }, result, state);
 
   io.log(`\n[READ] ${offenseCall.set || '?'} / ${offenseCall.name} vs ${defenseCall.set || '?'} / ${defenseCall.name}`);
+  if (result.audible) {
+    const audible = result.audible;
+    io.log(`[AUDIBLE] offense=${audible.offense?.family || 'AMBIGUOUS'}(${audible.offense?.confidence || 'LOW'}) | box=${audible.box?.classification || 'NEUTRAL'}(${audible.box?.confidence || 'LOW'}) | decision=${audible.decision || 'KEEP'} | provenance=${audible.box?.provenance || 'HEURISTIC'}`);
+    if (audible.reason) io.log(`[AUDIBLE] ${audible.reason}`);
+  }
   const authoritativeGuide = Boolean(
     result.authority?.available &&
     result.guide?.progressionStatus === 'derived' &&

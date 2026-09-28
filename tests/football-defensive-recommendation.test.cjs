@@ -541,3 +541,92 @@ test('Fix A2: known-good long-yardage four_verticals/Tampa Sim Pressure scoring 
   assert.ok(top.components.situation > 0, 'long-yardage coverage-shell/pressure bonus should still apply');
   assert.ok(top.components.bootstrapTheory > 0, 'bootstrap theory should still favor this call vs verticals');
 });
+
+
+test('unknown-concept cold start uses situation/structure evidence instead of raw candidate order alone', () => {
+  const engine = new FootballEngine();
+  const playbook = { plays: [
+    { id: 'pressure-first', name: 'Mid Blitz', concepts: [] },
+    { id: 'quarters-second', name: 'Quarters', concepts: ['cover_4'] },
+  ] };
+  const ranked = engine.recommendDefenses({
+    playbook,
+    offensePlay: { id: 'unknown-offense', name: 'Unresolved CPU Concept', concepts: [] },
+    situation: { down: 3, distance: 9 },
+    limit: 2,
+  });
+  assert.equal(ranked.recommendations[0].play.name, 'Quarters');
+  assert.ok(ranked.recommendations[0].components.situation > 0);
+  assert.ok(ranked.recommendations[0].components.structuralPrior > 0);
+});
+
+test('defensive family repetition is a modest predictability penalty across different exact calls', () => {
+  const engine = new FootballEngine();
+  const situation = { down: 1, distance: 10 };
+  const offense = { id: 'unknown-offense', name: 'Unresolved CPU Concept', concepts: [] };
+  for (const [id, name] of [['hist-1', 'Cover 3 Buzz'], ['hist-2', 'Cover 3 Cloud'], ['hist-3', 'Cover 3 Match']]) {
+    engine.recordPlay({
+      play: offense,
+      opponentPlay: { id, name, concepts: [] },
+      situation,
+      result: { yards: 4, firstDown: false, touchdown: false, turnover: false },
+    });
+  }
+  const ranked = engine.recommendDefenses({
+    playbook: { plays: [
+      { id: 'fresh-cover-3', name: 'Cover 3 Sky', concepts: ['cover_3'] },
+      { id: 'fresh-quarters', name: 'Quarters', concepts: ['cover_4'] },
+    ] },
+    offensePlay: offense,
+    situation,
+    limit: 2,
+  });
+  const cover3 = ranked.recommendations.find(r => r.play.id === 'fresh-cover-3');
+  assert.ok(cover3);
+  assert.ok(Math.abs(cover3.components.familyRepetition - (-0.54)) < 1e-9);
+  assert.equal(cover3.components.repetition, 0);
+  assert.equal(ranked.recommendations[0].play.id, 'fresh-quarters');
+});
+
+test('strong situation evidence can still justify a recently repeated defensive family', () => {
+  const engine = new FootballEngine();
+  const offense = { id: 'unknown-offense', name: 'Unresolved CPU Concept', concepts: [] };
+  for (const [id, name] of [['hist-q1', 'Cover 4 Drop'], ['hist-q2', 'Quarters'], ['hist-q3', 'Palms']]) {
+    engine.recordPlay({
+      play: offense,
+      opponentPlay: { id, name, concepts: [] },
+      situation: { down: 1, distance: 10 },
+      result: { yards: 4, firstDown: false, touchdown: false, turnover: false },
+    });
+  }
+  const ranked = engine.recommendDefenses({
+    playbook: { plays: [
+      { id: 'fresh-quarters', name: 'Quarters', concepts: ['cover_4'] },
+      { id: 'fresh-cover-1', name: 'Cover 1 Robber', concepts: ['cover_1'] },
+    ] },
+    offensePlay: offense,
+    situation: { down: 3, distance: 10 },
+    limit: 2,
+  });
+  const quarters = ranked.recommendations.find(r => r.play.id === 'fresh-quarters');
+  assert.ok(quarters.components.familyRepetition < 0);
+  assert.ok(quarters.components.situation > Math.abs(quarters.components.familyRepetition));
+  assert.equal(ranked.recommendations[0].play.id, 'fresh-quarters');
+});
+
+test('unknown-concept defensive ranking remains deterministic with no new evidence', () => {
+  const engine = new FootballEngine();
+  const args = {
+    playbook: { plays: [
+      { id: 'c3', name: 'Cover 3 Match', concepts: ['cover_3'] },
+      { id: 'qtrs', name: 'Quarters', concepts: ['cover_4'] },
+      { id: 'c1', name: 'Cover 1 Robber', concepts: ['cover_1'] },
+    ] },
+    offensePlay: { id: 'unknown-offense', name: 'Unresolved CPU Concept', concepts: [] },
+    situation: { down: 2, distance: 6 },
+    limit: 3,
+  };
+  const first = engine.recommendDefenses(args).recommendations.map(r => r.play.id);
+  const second = engine.recommendDefenses(args).recommendations.map(r => r.play.id);
+  assert.deepEqual(second, first);
+});

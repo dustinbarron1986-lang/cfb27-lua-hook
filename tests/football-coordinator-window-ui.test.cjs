@@ -222,3 +222,45 @@ test('authoritative assignment diagram uses derived readMarker without inventing
   assert.doesNotMatch(svg, />\?<\/text>/);
   assert.equal(receiver.button, null);
 });
+
+
+test('showSelection preserves the guide contract while exposing pre-snap audible advice', () => {
+  const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
+  const guide = { mode: 'pass', reads: [{ number: 1, label: 'X', detail: 'read leverage' }] };
+  const audible = {
+    decision: 'RUN', actionable: true,
+    box: { classification: 'LIGHT', confidence: 'MEDIUM', provenance: 'HEURISTIC' },
+    offense: { family: 'PASS', confidence: 'HIGH', provenance: 'EA_AUTHORED' },
+    reason: 'Light box against a pass-family call creates a conservative run-check opportunity.',
+  };
+  coordinatorWindow.showSelection(
+    { type: 'selected', play: { name: 'Four Verticals', formation: 'Gun Spread' }, opponentPlay: { name: 'Cover 4 Drop', formation: 'Dime 3-2' } },
+    { available: true, advice: { known: false }, guide, audible },
+    { quarter: 1, gameClockSeconds: 700, down: 1, distance: 10, yardLine: 25 }
+  );
+  assert.equal(coordinatorWindow.state.phase, 'selected');
+  assert.deepEqual(coordinatorWindow.state.guide, guide);
+  assert.deepEqual(coordinatorWindow.state.audibleRecommendation, audible);
+});
+
+test('render() shows audible advice alongside the existing read/guide surface', () => {
+  const { context, elements } = loadClientScript();
+  context.render({
+    phase: 'selected',
+    call: 'Four Verticals',
+    formation: 'Gun Spread',
+    defense: 'Cover 4 Drop',
+    defenseFormation: 'Dime 3-2',
+    read: ['Read leverage'],
+    guide: null,
+    audibleRecommendation: {
+      decision: 'RUN',
+      box: { classification: 'LIGHT', confidence: 'MEDIUM' },
+      reason: 'Light box against a pass-family call creates a conservative run-check opportunity.',
+    },
+  });
+  const html = elements.get('detail').innerHTML;
+  assert.match(html, /AUDIBLE: RUN/);
+  assert.match(html, /LIGHT box \/ MEDIUM confidence/);
+  assert.match(html, /Read leverage/);
+});
