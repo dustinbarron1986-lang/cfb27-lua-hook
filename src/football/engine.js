@@ -186,13 +186,12 @@ class FootballEngine {
 
   adviseExecution({ selectedPlay, defensiveCall, playbook = null, situation = null }) {
     // Deliberately post-selection: this is where exact live defense becomes relevant.
-    const normalizedDefense = defensiveCall ? this._withObservedFamily(defensiveCall, "defense") : defensiveCall;
     const audiblePackage = playbook && selectedPlay?.formation
       ? this.audiblePackages.ensurePackage(playbook, selectedPlay.formation)
       : null;
     return this.executionAdvisor.advise({
       selectedPlay,
-      defensiveCall: normalizedDefense,
+      defensiveCall,
       audiblePackage,
       playbook,
       situation,

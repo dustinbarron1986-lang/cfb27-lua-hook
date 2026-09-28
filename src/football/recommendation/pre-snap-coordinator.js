@@ -314,7 +314,10 @@ function advisePreSnapCoordinator({
     ['quick_horizontal', 'screen', 'perimeter_access', 'crossing'].includes(key)
   );
 
-  if (baseGrade.valid && baseGrade.fit >= 0.42 && (!pressure || quickAnswer)) {
+  if (baseGrade.valid && (
+    (!pressure && baseGrade.fit >= 0.42) ||
+    (pressure && quickAnswer && baseGrade.fit >= 0.18)
+  )) {
     return makeResult({
       action: { type: ACTION.STAY, label: 'KEEP PLAY' },
       baseGrade,
@@ -331,7 +334,7 @@ function advisePreSnapCoordinator({
   }
 
   const protector = pressure ? protectors[0] || null : null;
-  if (protector && baseGrade.valid && baseGrade.fit >= 0.34) {
+  if (protector && pressure && baseGrade.fit >= 0.10) {
     const protectedIndexes = new Set([Number(protector.playerIndex)]);
     return makeResult({
       action: {
