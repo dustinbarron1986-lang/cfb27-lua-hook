@@ -284,14 +284,25 @@ function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coor
 
   io.log(`\n[READ] ${offenseCall.set || '?'} / ${offenseCall.name} vs ${defenseCall.set || '?'} / ${defenseCall.name}`);
   if (!result.available) {
-    io.log(`[READ] No detailed concept guidance yet (${result.reason || 'play not mapped to concept knowledge'}).`);
-  } else {
+    io.log(`[READ] No detailed execution guidance yet (${result.reason || 'play not mapped to available guidance'}).`);
+  } else if (result.advice?.known) {
     const advice = result.advice;
     io.log(`[READ] ${advice.headline}${advice.pressureDetected ? ' | PRESSURE' : ''}`);
     const pre = advice.coaching?.preSnap?.[0];
     const post = advice.coaching?.postSnap?.[0];
     if (pre) io.log(`[READ] KEY: ${pre}`);
     if (post) io.log(`[READ] AFTER SNAP: ${post}`);
+  } else if (result.guide?.mode === 'run') {
+    io.log(`[READ] ${result.guide.headline || 'Authoritative run structure available.'}`);
+    if (result.guide.watch) io.log(`[READ] KEY: ${result.guide.watch}`);
+    if (result.guide.steps?.[0]) io.log(`[READ] CUT: ${result.guide.steps[0]}`);
+  } else if (result.guide?.reads?.length) {
+    io.log('[READ] Authoritative EA assignment structure available; read order is DERIVED_STRUCTURAL.');
+    const first = result.guide.reads[0];
+    if (first?.detail) io.log(`[READ] ${first.number || '1'}: ${first.label || 'Read'} — ${first.detail}`);
+    for (const extra of result.guide.reads.filter(read => read.number === 'ALERT' || read.number === 'OUT')) {
+      io.log(`[READ] ${extra.number}: ${extra.label} — ${extra.detail}`);
+    }
   }
   return key;
 }
@@ -535,14 +546,18 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   const playbooks = loadPlaybooks(root, config);
   const game = await sdk.discoverGame();
   const client = sdk.createClient({ pid: game.pid });
-  const engine = new FootballEngine();
-  const reducer = new SnapReducer();
   // Optional/read-only: the generated EA artifact is intentionally gitignored.
   // Missing/invalid data makes only the authority layer unavailable; legacy
   // coordinator selection/execution remains fully operational.
+  // This single long-lived instance is shared by live identity resolution and
+  // ExecutionAdvisor expansion; gameplay never rereads/parses the XML corpus.
   const authoritativePlayStore = new EaPlayKnowledgeStore({
     filePath: path.resolve(root, 'data/knowledge/pro-style-ea-play-knowledge.json'),
   });
+  const engine = new FootballEngine({
+    executionAdvisor: { eaPlayKnowledgeStore: authoritativePlayStore },
+  });
+  const reducer = new SnapReducer();
   let lastSituationKey = null;
   let lastExecutionKey = null;
   // Diagnostic-only deduplication. This key never participates in freshness,
