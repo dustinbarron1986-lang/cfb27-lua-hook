@@ -116,8 +116,8 @@ function detectRelationship(items) {
     if (!side) continue;
     const flat = firstWith(group, 'flat');
     const outBreaker = group.find(item => item.traits.traits.has('out_break') && !item.traits.traits.has('flat'));
-    const deep = group.find(item => item.traits.traits.has('deep'));
-    if (flat && outBreaker && deep && new Set([flat, outBreaker, deep]).size === 3) {
+    const deep = group.find(item => item !== outBreaker && item !== flat && item.traits.traits.has('deep'));
+    if (flat && outBreaker && deep) {
       return { family: 'flood', keyDefender: 'curl-flat / overhang defender', order: [flat, outBreaker, deep] };
     }
 
