@@ -79,3 +79,25 @@ test('self scout stays conservative at low sample and never claims CPU certainty
   assert.equal(scout.confidence, 'VERY_LOW');
   assert.match(scout.interpretation, /does not claim/i);
 });
+
+
+test('sequence memory does not resurrect a prior offensive drive while opponent owns the latest snap', () => {
+  const store = new PerformanceStore([
+    event(run('old1')),
+    event(run('old2')),
+    event(pa('opp'), true, 1),
+  ]);
+  const sequence = new SequenceMemory(store);
+  assert.equal(sequence.driveState().plays, 0);
+  assert.equal(sequence.intent([run('r1'), pa('p1')]).type, 'ESTABLISH');
+});
+
+test('sequence presentation retains direction and resulting hash context', () => {
+  const row = event({ ...run('r1'), runDirection: 'LEFT' });
+  row.situation.hash = 'LEFT_HASH';
+  row.situation.fieldSide = 'RIGHT';
+  const state = new SequenceMemory(new PerformanceStore([row])).driveState();
+  assert.equal(state.rows[0].direction, 'LEFT');
+  assert.equal(state.rows[0].hash, 'LEFT_HASH');
+  assert.equal(state.rows[0].fieldSide, 'RIGHT');
+});
