@@ -15,6 +15,7 @@ const {
 } = require('./playbook-loader.cjs');
 const { loadCoordinatorConfig, saveCoordinatorConfig } = require('../football/config/coordinator-config');
 const { EaPlayKnowledgeStore } = require('../football/knowledge/ea-play-knowledge-store');
+const { resolveAuthoritativeDefense } = require('../football/analysis/authoritative-defense');
 const { GamePhaseTracker } = require('./game-phase-tracker.cjs');
 const { oracleStrategicDecision } = require('../football/gameplan/strategic-context');
 const {
@@ -135,11 +136,12 @@ function isOffensiveScrimmageSituation(state) {
   return true;
 }
 
-function exactDefenseFromState(engine, state, fresh = null) {
+function exactDefenseFromState(engine, state, fresh = null, authoritativeStore = null) {
   if (state?.possession !== 0 || fresh?.defense !== true) return null;
   const call = callFromState(state, 'defense');
   if (!call.available || !call.name) return null;
   const descriptor = engine.knowledge.catalogResolver?.describeDefensivePlay?.(call.name) || null;
+  const authoritativeDefense = resolveAuthoritativeDefense({ store: authoritativeStore, liveCall: call });
   return {
     id: call.id || call.name,
     name: call.name,
@@ -148,6 +150,7 @@ function exactDefenseFromState(engine, state, fresh = null) {
     coverageFamily: descriptor?.coverageFamily || engine.knowledge.resolveCoverage(call.name) || null,
     assignmentFamilies: descriptor?.assignmentFamilies || [],
     concepts: descriptor?.concepts || [],
+    authoritativeDefense,
   };
 }
 
@@ -1127,7 +1130,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
           io
         );
 
-        const exactDefense = exactDefenseFromState(engine, current, fresh);
+        const exactDefense = exactDefenseFromState(engine, current, fresh, authoritativePlayStore);
         const oracleOffenseCall = callFromState(current, 'offense');
         if (current.possession === 0 && fresh.offense && exactDefense && oracleOffenseCall.available) {
           const oracleRecommendationKey = [
