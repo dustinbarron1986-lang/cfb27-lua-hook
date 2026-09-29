@@ -29,7 +29,7 @@ function canonicalRoute(value) {
   if (/\b(dig|deep in|in route)\b/.test(text)) return 'in_dig';
   if (/\bdeep out\b/.test(text)) return 'deep_out';
   if (/\b(quick out|speed out)\b/.test(text)) return 'quick_out';
-  if (/\b(drag|shallow|shallow cross)\b/.test(text)) return 'shallow_cross';
+  if (/\b(drag|shallow|shallow ?cross)\b/.test(text)) return 'shallow_cross';
   if (/\b(hitch|curl|comeback)\b/.test(text)) return 'hitch_curl';
   if (/\bscreen\b|\bbubble\b/.test(text)) return 'screen';
   if (/\bswing\b/.test(text)) return 'swing';

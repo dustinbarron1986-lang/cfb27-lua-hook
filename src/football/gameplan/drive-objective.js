@@ -41,11 +41,10 @@ function resolveObjective(situation = {}) {
 }
 
 function objectiveMateriallyChanged(previous = {}, next = {}) {
-  if (!previous.objective) return true;
-  if (Number(previous.possession) !== Number(next.possession)) return true;
-  const prior = resolveObjective(previous);
-  const current = resolveObjective(next);
-  return prior.objective !== current.objective;
+  if (!previous || !Object.keys(previous).length) return true;
+  if (previous.possession != null && next.possession != null &&
+      Number(previous.possession) !== Number(next.possession)) return true;
+  return resolveObjective(previous).objective !== resolveObjective(next).objective;
 }
 
 class DriveObjectiveTracker {
@@ -66,6 +65,7 @@ class DriveObjectiveTracker {
   }
 
   get(situation = {}) {
+    this.observe(situation);
     const resolved = resolveObjective(situation);
     if (!this.current || objectiveMateriallyChanged(this.current.situation, situation)) {
       this.current = {
