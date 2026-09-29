@@ -89,7 +89,8 @@ class FootballEngine {
         structural: offensePlay?.structural || classifyOffensiveStructure(
           offensePlay || {},
           offensePlay?.authoritativeStructure || null
-        )
+        ),
+        normalizedProfile: offensePlay?.normalizedProfile || this.offensiveProfiles.profile(offensePlay || {})
       },
       opponentPlay: defensePlay ? {
         ...defensePlay,
