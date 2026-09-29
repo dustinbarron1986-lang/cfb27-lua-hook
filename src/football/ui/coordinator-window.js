@@ -360,6 +360,7 @@ function renderPage(title = 'CFB 27 Offensive Coordinator') {
       <div class="settingsStatus">0 = conservative · 100 = aggressive; live telemetry overrides when exposed.</div>
       <div class="settingsActions">
         <button id="savePlaybooks" type="button">Save</button>
+        <button id="regenerateGameplan" type="button">Regenerate current call sheet</button>
         <span id="settingsMessage" class="settingsMessage"></span>
       </div>
       <div id="audiblePackages" class="audiblePackages"></div>
@@ -393,6 +394,9 @@ let lastUpdated = null;
 // will always remain true) and 'waiting'/'error' precede knowing a side --
 // all three get the neutral title rather than a guess.
 function titleForPhase(phase) {
+  if (phase === 'halftime_review') return 'CFB 27 HALFTIME GAMEPLAN REVIEW';
+  if (phase === 'end_regulation_pending') return 'CFB 27 END REGULATION';
+  if (phase === 'final') return 'CFB 27 FINAL GAMEPLAN REVIEW';
   if (phase === 'defensive_huddle' || phase === 'defensive_unavailable') return 'CFB 27 DEFENSIVE COORDINATOR';
   if (phase === 'huddle' || phase === 'selected' || phase === 'audible' || phase === 'unavailable') return 'CFB 27 OFFENSIVE COORDINATOR';
   return 'CFB 27 COORDINATOR';
@@ -691,6 +695,24 @@ function render(s) {
     }
     els.detail.className = 'why warn';
     els.detail.innerHTML = detail('WHY', s.why || 'Waiting for a valid defensive read.');
+  } else if (s.phase === 'halftime_review' || s.phase === 'end_regulation_pending' || s.phase === 'final') {
+    const review = s.lifecycleReview || {};
+    const mix = review.mix || {};
+    const neutral = review.neutralMix || {};
+    const top = (review.mostUsedPlays || []).map(row => row.play + ' (' + row.attempts + ')');
+    const warnings = (review.repetitionWarnings || []).map(row => row.play + ': ' + row.attempts + ' uses');
+    els.eyebrow.textContent = s.phase === 'halftime_review' ? 'HALFTIME GAMEPLAN REVIEW' :
+      (s.phase === 'final' ? 'FINAL GAMEPLAN REVIEW' : 'END REGULATION — OVERTIME/FINAL PENDING');
+    els.play.textContent = s.lifecycleGameplanName || s.gameplanName || 'Gameplan';
+    setFormation(null);
+    els.detail.innerHTML =
+      detail('MIX', 'RUN ' + (mix.run || 0) + ' · HYBRID ' + (mix.hybrid || 0) + ' · PASS ' + (mix.pass || 0) + ' · SCREEN ' + (mix.screen || 0)) +
+      detail('NEUTRAL MIX', 'RUN ' + (neutral.run || 0) + ' · HYBRID ' + (neutral.hybrid || 0) + ' · PASS ' + (neutral.pass || 0) + ' · SCREEN ' + (neutral.screen || 0)) +
+      detail('MOST USED', top) +
+      detail('REPETITION WATCH', warnings) +
+      detail('CHOICES', s.phase === 'halftime_review'
+        ? ['Keep current plan: no action needed.', 'Modify/regenerate: use Regenerate current call sheet above.', 'Switch gameplan: choose another Gameplan above and Save.']
+        : (s.phase === 'end_regulation_pending' ? 'Waiting for verified overtime/final evidence.' : 'Postgame review only; no automatic gameplan mutation.'));
   } else if (s.phase === 'result') {
     els.eyebrow.textContent = 'RESULT';
     els.play.textContent = s.result || 'Play complete';
@@ -733,6 +755,7 @@ const settingsEls = {
   gameplanStatus: document.getElementById('gameplanStatus'),
   aggressivenessInput: document.getElementById('aggressivenessInput'),
   saveButton: document.getElementById('savePlaybooks'),
+  regenerateButton: document.getElementById('regenerateGameplan'),
   message: document.getElementById('settingsMessage'),
   audiblePackages: document.getElementById('audiblePackages')
 };
@@ -821,6 +844,19 @@ settingsEls.audiblePackages.addEventListener('click', async event => {
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || 'Failed to confirm audible package');
     settingsEls.message.textContent = pkg.formation + ' audibles confirmed.';
+    await loadSettingsPanel();
+  } catch (error) {
+    settingsEls.message.textContent = String(error?.message || error);
+  }
+});
+
+settingsEls.regenerateButton.addEventListener('click', async () => {
+  settingsEls.message.textContent = 'Regenerating current call sheet…';
+  try {
+    const r = await fetch('/api/gameplans/regenerate', { method: 'POST' });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || 'Failed to regenerate gameplan');
+    settingsEls.message.textContent = 'Regenerated ' + (body.gameplanName || 'current gameplan') + ' — setup memory preserved';
     await loadSettingsPanel();
   } catch (error) {
     settingsEls.message.textContent = String(error?.message || error);
@@ -933,6 +969,9 @@ class CoordinatorWindow {
       cpuFormation: null,
       read: null,
       guide: null,
+      telemetryProvenance: null,
+      lifecycleReview: null,
+      lifecycleGameplanName: null,
       gameplanName: null,
       planReason: null,
       audibleRecommendation: null,
@@ -950,6 +989,26 @@ class CoordinatorWindow {
       updatedAt: new Date().toISOString()
     };
     return this.state;
+  }
+
+  setTelemetryProvenance(provenance = {}) {
+    return this._set({ telemetryProvenance: { ...(this.state.telemetryProvenance || {}), ...provenance } });
+  }
+
+  showLifecycle(action, state) {
+    this.updateSituation(state);
+    const type = action?.type || null;
+    const phase = type === 'HALFTIME' ? 'halftime_review' :
+      type === 'END_REGULATION_PENDING' ? 'end_regulation_pending' :
+      type === 'FINAL' ? 'final' : this.state.phase;
+    return this._set({
+      phase,
+      lifecycleReview: action?.review || null,
+      lifecycleGameplanName: action?.gameplan?.gameplanName || null,
+      gameplanName: action?.gameplan?.gameplanName || this.state.gameplanName,
+      planReason: null,
+      why: null,
+    });
   }
 
   setGameInfo({ playbook, gameId, membershipVerified } = {}) {
@@ -1230,6 +1289,22 @@ class CoordinatorWindow {
           res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ error: String(error?.message || error) }));
         });
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/api/gameplans/regenerate') {
+        if (!this.playbookService?.regenerateGameplan) {
+          res.writeHead(503, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'Gameplan regeneration is not available in this session.' }));
+          return;
+        }
+        try {
+          const result = this.playbookService.regenerateGameplan();
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: String(error?.message || error) }));
+        }
         return;
       }
       if (req.method === 'GET' && req.url === '/api/audibles') {

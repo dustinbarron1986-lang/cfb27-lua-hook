@@ -15,6 +15,8 @@ const {
 } = require('./playbook-loader.cjs');
 const { loadCoordinatorConfig, saveCoordinatorConfig } = require('../football/config/coordinator-config');
 const { EaPlayKnowledgeStore } = require('../football/knowledge/ea-play-knowledge-store');
+const { GamePhaseTracker } = require('./game-phase-tracker.cjs');
+const { oracleStrategicDecision } = require('../football/gameplan/strategic-context');
 const {
   resolveFreshOffensiveAuthority,
   attachAuthoritativeIdentity,
@@ -71,6 +73,14 @@ async function tailCursor(client) {
 }
 
 function situationFromState(state) {
+  const directDiff = Number(state?.scoreDifferential);
+  const hasDirectDiff = Number.isFinite(directDiff);
+  const userIsHome = typeof state?.userIsHome === 'boolean' ? state.userIsHome : null;
+  const home = Number(state?.homeScore);
+  const away = Number(state?.awayScore);
+  const hasScores = Number.isFinite(home) && Number.isFinite(away);
+  const offenseScore = userIsHome == null || !hasScores ? null : (userIsHome ? home : away);
+  const defenseScore = userIsHome == null || !hasScores ? null : (userIsHome ? away : home);
   const base = {
     down: state.down,
     distance: state.distance,
@@ -79,9 +89,15 @@ function situationFromState(state) {
     clockSeconds: state.gameClockSeconds,
     playClockSeconds: state.playClockSeconds,
     possession: state.possession,
-    offenseScore: null,
-    defenseScore: null,
-    scoreDifferential: null,
+    offenseScore,
+    defenseScore,
+    scoreDifferential: hasDirectDiff
+      ? directDiff
+      : (offenseScore == null || defenseScore == null ? null : offenseScore - defenseScore),
+    quarterSource: state.quarterSource || null,
+    quarterConfidence: state.quarterConfidence || null,
+    gamePhase: state.gamePhase || null,
+    scoreDifferentialSource: state.scoreDifferentialSource || (userIsHome == null ? 'UNAVAILABLE' : 'VERIFIED_USER_HOME_AWAY'),
   };
   base.flags = deriveSituation(base);
   return base;
@@ -346,6 +362,29 @@ function printOracleRecommendation(engine, playbooks, state, exactDefense, io, c
     });
     oracle = decideOracleRecommendation(initialPlay, ranked);
 
+    if (oracle.decision === 'CHANGE') {
+      const initialRow = (ranked.strategicCandidates || []).find(row => samePlay(row.play, initialPlay)) || null;
+      const strategic = oracleStrategicDecision({
+        currentPlay: initialPlay,
+        replacementPlay: oracle.replacement,
+        situation: situationFromState(state),
+        tacticalDelta: oracle.scoreDelta,
+        currentStructurallyValid: Boolean(initialRow?.diagnostic?.counter?.valid),
+      });
+      if (!strategic.allow) {
+        oracle = {
+          decision: 'KEEP',
+          play: initialPlay,
+          replacement: null,
+          scoreDelta: oracle.scoreDelta,
+          reason: strategic.reason,
+          strategic,
+        };
+      } else if (strategic.reason) {
+        oracle = { ...oracle, reason: strategic.reason + ' ' + oracle.reason, strategic };
+      }
+    }
+
     if (oracle.decision === 'CHANGE' &&
         !scope.audiblePlays.some(play => samePlay(play, oracle.replacement))) {
       oracle = {
@@ -362,7 +401,7 @@ function printOracleRecommendation(engine, playbooks, state, exactDefense, io, c
           ? `The current play is outside the exact-defense counter set; ${oracle.replacement?.name || 'the recommended audible'} is a confirmed ${initialPlay.formation} audible.`
           : `The revealed defense makes confirmed audible ${oracle.replacement?.name || ''} materially better (+${Number(oracle.scoreDelta).toFixed(2)}).`,
       };
-    } else {
+    } else if (!oracle.strategic?.reason) {
       oracle = {
         ...oracle,
         reason: `No confirmed ${initialPlay.formation} audible is materially better than the current play.`,
@@ -753,6 +792,9 @@ function snapToFootballEvent(snap, playbooks) {
     possession: snap.start.possession,
     homeScore: snap.start.homeScore,
     awayScore: snap.start.awayScore,
+    scoreDifferential: snap.start.scoreDifferential,
+    scoreDifferentialSource: snap.start.scoreDifferentialSource,
+    userIsHome: snap.start.userIsHome,
     yardsGained: snap.result.yards,
     firstDown: snap.result.firstDown,
     touchdown: snap.result.touchdown,
@@ -819,6 +861,17 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
       appliedImmediately = true;
     }
     return { ...result, appliedImmediately };
+  }
+
+  function regenerateGameplan() {
+    const result = engine.regenerateGameplan?.(playbooks.offense);
+    if (!result?.available) throw new Error(result?.reason || 'Gameplan regeneration is unavailable.');
+    io.log(`[GAMEPLAN] regenerated ${result.gameplanName} | callSheet=${result.callSheetSize}`);
+    const lastKnownState = getLastKnownState();
+    if (lastKnownState && isOffensiveScrimmageSituation(lastKnownState)) {
+      printRecommendation(engine, playbooks, lastKnownState, io, coordinatorWindow);
+    }
+    return result;
   }
 
   function listAudiblePackages() {
@@ -897,6 +950,7 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
     setPlaybookSelection,
     listGameplans,
     setGameplanSelection,
+    regenerateGameplan,
     listAudiblePackages,
     confirmAudiblePackage,
   };
@@ -927,6 +981,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   const audiblePreparation = engine.prepareAudiblePackages(playbooks.offense);
   const gameplanPreparation = engine.prepareGameplan(playbooks.offense);
   const reducer = new SnapReducer();
+  const phaseTracker = new GamePhaseTracker();
   let lastSituationKey = null;
   let lastExecutionKey = null;
   let lastOracleRecommendationKey = null;
@@ -986,7 +1041,12 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
 
     for await (const event of sdk.followEvents(client, { after, pollMs: config.pollMs || 250, signal })) {
       if (event.type !== 'coord.state') continue;
-      const state = event.payload;
+      const phaseResolved = phaseTracker.resolve(event.payload || {});
+      const state = phaseResolved.state;
+      const lifecycleEvent = phaseResolved.lifecycle;
+      if (lifecycleEvent) {
+        io.log(`[GAME] ${lifecycleEvent} | phase=${phaseResolved.phase} | quarterSource=${phaseResolved.quarterSource} | scoreSource=${phaseResolved.scoreDifferentialSource}`);
+      }
       const reduced = reducer.ingest(state);
       if (reduced.type === 'ignored') continue;
 
@@ -994,6 +1054,14 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
       if (current) {
         lastKnownState = current;
         coordinatorWindow.updateSituation(current);
+        if (current.quarterSource || current.scoreDifferentialSource) {
+          coordinatorWindow.setTelemetryProvenance?.({
+            quarterSource: current.quarterSource,
+            quarterConfidence: current.quarterConfidence,
+            scoreDifferentialSource: current.scoreDifferentialSource,
+            gamePhase: current.gamePhase,
+          });
+        }
         const situationKey = `${current.possession}|${current.quarter}|${current.down}|${current.distance}|${current.fieldX}|${current.lineToGain}`;
         if (situationKey !== lastSituationKey) {
           quarantine = handleNewSituation(engine, playbooks, current, lastSituationKey, situationKey, io, coordinatorWindow);
@@ -1084,6 +1152,18 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
         );
       }
 
+      if (lifecycleEvent) {
+        const review = lifecycleEvent === 'HALFTIME'
+          ? engine.halftimeGameplanReview?.() || null
+          : (lifecycleEvent === 'FINAL' ? engine.reviewGameplan?.() || [] : null);
+        coordinatorWindow.showLifecycle?.({
+          type: lifecycleEvent,
+          phase: phaseResolved.phase,
+          review,
+          gameplan: engine.gameplanSummary?.() || null,
+        }, state);
+      }
+
       if (reduced.type === 'completed_snap') {
         const footballEvent = snapToFootballEvent(reduced.snap, playbooks);
         const recorded = engine.recordPlay(footballEvent);
@@ -1115,7 +1195,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
     }
   }
 
-  return { engine, reducer };
+  return { engine, reducer, phaseTracker };
 }
 
 module.exports = {
@@ -1141,4 +1221,5 @@ module.exports = {
   rearmAfterAdministrativeReset,
   createPlaybookService,
   playbookLogLine,
+  GamePhaseTracker,
 };

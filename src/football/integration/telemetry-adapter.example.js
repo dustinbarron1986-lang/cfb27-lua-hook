@@ -46,9 +46,9 @@ function deriveSituation(s) {
   const fourMinute =
     quarter >= 4 &&
     clockSeconds != null &&
-    clockSeconds <= 240 &&
     scoreDiff != null &&
-    scoreDiff > 0;
+    scoreDiff > 0 &&
+    (clockSeconds <= 240 || (scoreDiff >= 8 && clockSeconds <= 360));
 
   return {
     redZone: yardLine != null ? yardLine >= 80 : false,
@@ -70,10 +70,12 @@ function toFootballEvent(raw, lookup = {}) {
   const off = lookup.offensePlay?.(raw.offensePlayId) || {};
   const def = lookup.defensePlay?.(raw.defensePlayId) || {};
   const scores = resolveScores(raw);
-  const scoreDifferential =
-    scores.offenseScore == null || scores.defenseScore == null
+  const directScoreDifferential = finiteOrNull(raw.scoreDifferential);
+  const scoreDifferential = directScoreDifferential != null
+    ? directScoreDifferential
+    : (scores.offenseScore == null || scores.defenseScore == null
       ? null
-      : scores.offenseScore - scores.defenseScore;
+      : scores.offenseScore - scores.defenseScore);
 
   const situation = {
     down: finiteOrNull(raw.down),
@@ -86,6 +88,7 @@ function toFootballEvent(raw, lookup = {}) {
     offenseScore: scores.offenseScore,
     defenseScore: scores.defenseScore,
     scoreDifferential,
+    scoreDifferentialSource: raw.scoreDifferentialSource || (directScoreDifferential != null ? 'USER_RELATIVE_TELEMETRY' : null),
     goalToGo: Boolean(raw.goalToGo)
   };
 

@@ -196,6 +196,10 @@ class FootballEngine {
     return this.gameplans.setSelection(playbook, options);
   }
 
+  regenerateGameplan(playbook) {
+    return this.gameplans.regenerate(playbook);
+  }
+
   updateOffensiveAggressiveness(value) {
     return this.gameplans.updateAggressiveness(value);
   }
@@ -210,6 +214,10 @@ class FootballEngine {
 
   resetGameplanSession() {
     return this.gameplans.resetSession();
+  }
+
+  halftimeGameplanReview(options = {}) {
+    return this.gameplans.halftimeReview({ performanceStore: this.performance, ...options });
   }
 
   reviewGameplan(options = {}) {

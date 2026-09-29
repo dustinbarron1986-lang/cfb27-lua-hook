@@ -165,6 +165,21 @@ local function possession_label(possession)
     return "unknown"
 end
 
+-- Read-only Deer/game API getters are preferred where they have already been
+-- exposed into this Lua state. Every call is protected and range-checked; a
+-- missing/erroring getter simply falls back to the existing telemetry path.
+local function safe_global_number(name, minValue, maxValue)
+    local fn = rawget(_G, name)
+    if type(fn) ~= "function" then return nil end
+    local ok, value = pcall(fn)
+    if not ok then return nil end
+    local n = tonumber(value)
+    if n == nil then return nil end
+    if minValue ~= nil and n < minValue then return nil end
+    if maxValue ~= nil and n > maxValue then return nil end
+    return n
+end
+
 local function publish_state()
     local module = cfb.module_base()
     local state = read_u64(module + SITUATION_ROOT_RVA)
@@ -177,7 +192,11 @@ local function publish_state()
     local playClock  = read_u32(state + 0x168)
     local homeScore  = read_u32(state + 0x16C)
     local awayScore  = read_u32(state + 0x170)
-    local quarter    = cfb.read_u8(state + 0x174)
+    local quarterMemory = cfb.read_u8(state + 0x174)
+    local quarterApi = safe_global_number("GETQUARTER", 1, 20)
+    local clockApi = safe_global_number("GETTIMEREMAINING", 0, 60 * 60)
+    local scoreDiffApi = safe_global_number("GETSCOREDIFF", -200, 200)
+    local quarter = quarterApi or quarterMemory
     local possession = cfb.read_u8(state + 0x178)
     local down       = read_u32(state + 0x17C)
     local distance   = read_u32(state + 0x180)
@@ -260,11 +279,17 @@ local function publish_state()
 
     cfb.emit("coord.state", {
         gameClockSeconds = gameClock,
+        apiGameClockSeconds = clockApi,
         playClockSeconds = playClock,
         quarter = quarter,
+        rawQuarter = quarterMemory,
+        apiQuarter = quarterApi,
+        quarterTelemetrySource = quarterApi ~= nil and "AUTHORITATIVE_API" or "MEMORY",
 
         homeScore = homeScore,
         awayScore = awayScore,
+        scoreDifferentialApi = scoreDiffApi,
+        scoreDifferentialSource = scoreDiffApi ~= nil and "AUTHORITATIVE_API" or nil,
 
         possession = possession,
         possessionLabel = possessionLabel,

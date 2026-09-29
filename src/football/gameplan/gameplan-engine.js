@@ -426,6 +426,28 @@ function generateCallSheet({
     }
   }
 
+  // Philosophy inventory accountability: the call sheet itself must contain
+  // enough identity-bearing calls before live scoring begins. This is NOT a
+  // rigid in-game run percentage; situation/counter gates still decide what is
+  // appropriate on each snap.
+  const identityTargets = plan.id === 'ground_control'
+    ? { pureRun: Math.min(target, Math.round(target * 0.40)), runLike: Math.min(target, Math.round(target * 0.52)) }
+    : (plan.id === 'power_pro_style'
+      ? { pureRun: Math.min(target, Math.round(target * 0.34)), runLike: Math.min(target, Math.round(target * 0.46)) }
+      : null);
+  if (identityTargets) {
+    const pureRunCount = () => [...selected.values()].filter(row => row.typeFamily === 'run').length;
+    const runLikeCount = () => [...selected.values()].filter(row => row.runLike).length;
+    for (const row of fitRanked.filter(row => row.typeFamily === 'run')) {
+      if (pureRunCount() >= identityTargets.pureRun || selected.size >= target) break;
+      add(row, row.role || 'CORE');
+    }
+    for (const row of fitRanked.filter(row => row.runLike)) {
+      if (runLikeCount() >= identityTargets.runLike || selected.size >= target) break;
+      add(row, row.role || 'CORE');
+    }
+  }
+
   // Ensure the sheet has real answers for common game situations. Plays can
   // count in multiple buckets; these are coverage floors, not rigid quotas.
   const quotas = bucketQuotas(plan.id);
@@ -733,6 +755,20 @@ class GameplanEngine {
 
   setSelection(playbook, { gameplanId, aggressiveness } = {}) {
     return this.prepare(playbook, { gameplanId, aggressiveness });
+  }
+
+  regenerate(playbook) {
+    if (!this.active || String(playbook?.id) !== this.active.playbookId) {
+      return this.prepare(playbook);
+    }
+    const key = this._sheetKey(playbook.id, this.active.gameplan.id);
+    delete this.data.sheets[key];
+    // Deliberately preserve this.setup: halftime philosophy/call-sheet changes
+    // must not erase what the defense has already seen in this game.
+    return this.prepare(playbook, {
+      gameplanId: this.active.gameplan.id,
+      aggressiveness: this.active.aggressiveness,
+    });
   }
 
   updateAggressiveness(value) {

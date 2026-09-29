@@ -23,6 +23,34 @@ function bounded(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function usageSaturation(store, play, counter, situation) {
+  const summary = store.summarizePlay(play.id);
+  const attempts = Number(summary.attempts || 0);
+  if (attempts < 5) return { score: 0, attempts, exploit: false, reasons: [] };
+
+  let penalty = 0;
+  if (attempts >= 5) penalty -= Math.min(1.0, (attempts - 4) * 0.16);
+  if (attempts >= 10) penalty -= Math.min(1.5, (attempts - 9) * 0.24);
+  if (attempts >= 15) penalty -= Math.min(2.0, (attempts - 14) * 0.30);
+  if (attempts >= 20) penalty -= Math.min(2.0, (attempts - 19) * 0.36);
+
+  const success = Number(summary.situationalSuccessRate);
+  const fit = Number(counter?.fit);
+  const exploit = success >= 0.58 && fit >= 0.72 && counter?.gate?.valid !== false &&
+    !situation?.flags?.fourMinute && !situation?.flags?.trailingLate;
+  if (exploit) penalty *= 0.48;
+
+  return {
+    score: penalty,
+    attempts,
+    exploit,
+    reasons: [
+      `usage saturation: exact play has ${attempts} game calls`,
+      ...(exploit ? ['REUSE: defense still has not demonstrated an effective structural answer, so saturation cost is reduced rather than banning the call.'] : []),
+    ],
+  };
+}
+
 function performanceScore(store, play, situation) {
   const playSummary = store.summarizePlay(play.id);
   const situationSummary = store.summarizePlayInSituation(play.id, situation);
@@ -143,6 +171,7 @@ class PlaySelectionEngine {
         situation
       });
       const family = counterFamily(counter, play);
+      const saturation = usageSaturation(this.store, play, counter, situation);
       const recommendationPenalty = this.recommendationHistory
         ? this.recommendationHistory.penalty('offense', play, family)
         : { score: 0, reasons: [], exactHits: 0, familyHits: 0 };
@@ -154,7 +183,8 @@ class PlaySelectionEngine {
         counterFit: counter.score,
         situation: situationPart.score,
         gameDayPerformance: performancePart.score * 0.45,
-        setupValue: setupPart.score * 0.50,
+        legacySequenceSetup: setupPart.score * 0.50,
+        usageSaturation: saturation.score * 0.35,
         historicalTendency: tendencyPart.score * 0.20,
         executionRepetition: executionRepetition * 0.35,
         recommendationRepetition: recommendationPenalty.score,
@@ -166,12 +196,15 @@ class PlaySelectionEngine {
         situation: situationPart.score,
         historicalTendency: tendencyPart.score * 0.75,
         gameDayPerformance: performancePart.score,
-        setupValue: setupPart.score,
+        legacySequenceSetup: setupPart.score,
+        usageSaturation: saturation.score,
         executionRepetition,
         recommendationRepetition: recommendationPenalty.score,
         risk: riskPenalty,
         gameplanFit: strategyPart.components?.gameplanFit || 0,
         callSheetMembership: strategyPart.components?.callSheetMembership || 0,
+        gameplanMixAccountability: strategyPart.components?.gameplanMixAccountability || 0,
+        strategicSituation: strategyPart.components?.strategicSituation || 0,
         sequencingValue: strategyPart.components?.sequencingValue || 0,
         setupValue: strategyPart.components?.setupValue || 0,
         payoffValue: strategyPart.components?.payoffValue || 0,
@@ -185,6 +218,7 @@ class PlaySelectionEngine {
         ...counter.reasons,
         ...situationPart.reasons,
         ...performancePart.reasons.map(r => `secondary execution evidence: ${r}`),
+        ...saturation.reasons,
         ...recommendationPenalty.reasons,
       ] : [
         ...(historicalStructureAvailable
@@ -194,6 +228,7 @@ class PlaySelectionEngine {
         ...tendencyPart.reasons,
         ...performancePart.reasons,
         ...setupPart.reasons,
+        ...saturation.reasons,
         ...recommendationPenalty.reasons,
         ...(strategyPart.planReasons || []).map(r => `gameplan: ${r}`),
         ...(strategyPart.reasons || []).map(r => `strategy: ${r}`),
@@ -220,6 +255,7 @@ class PlaySelectionEngine {
           thisGame: performancePart.playSummary,
           sameSituation: performancePart.situationSummary,
           performanceComponents: performancePart.components,
+          usageSaturation: saturation,
           recommendationExposure: recommendationPenalty,
           strategy: strategyPart,
           totalComponents: components
@@ -262,4 +298,4 @@ class PlaySelectionEngine {
   }
 }
 
-module.exports = { PlaySelectionEngine, performanceScore, recentRepetitionPenalty };
+module.exports = { PlaySelectionEngine, performanceScore, recentRepetitionPenalty, usageSaturation };

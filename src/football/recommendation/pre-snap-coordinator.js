@@ -2,6 +2,7 @@
 
 const { classifyOffensiveStructure, classifyDefensiveStructure, normalize } = require('../analysis/structural-threat-model');
 const { evaluateOffensiveCandidate, desiredOffensiveThreats } = require('./counter-model');
+const { adjustmentCapabilities } = require('./play-adjustment-capabilities');
 
 const ACTION = Object.freeze({
   STAY: 'STAY',
@@ -258,7 +259,7 @@ function bestBetFor({ authoritativeKnowledge, defenseProfile, protectedIndexes =
   };
 }
 
-function makeResult({ action, baseGrade, finalGrade, defenseProfile, audiblePackage, protectedIndexes, hotRoute, authoritativeKnowledge, reasons, confidence, source }) {
+function makeResult({ action, baseGrade, finalGrade, defenseProfile, audiblePackage, protectedIndexes, hotRoute, authoritativeKnowledge, reasons, confidence, source, capabilities = null }) {
   const bestBet = bestBetFor({
     authoritativeKnowledge,
     defenseProfile,
@@ -273,6 +274,7 @@ function makeResult({ action, baseGrade, finalGrade, defenseProfile, audiblePack
     reasons: reasons || [],
     confidence: confidence || 'MEDIUM',
     source: source || 'DERIVED_STRUCTURAL',
+    adjustmentCapabilities: capabilities,
     baseGrade,
     finalGrade,
     audiblePackage: audiblePackage?.available ? {
@@ -304,6 +306,7 @@ function advisePreSnapCoordinator({
   const defenseProfile = profileForDefense(defensiveCall, knowledge);
   const defense = defenseProfile.current;
   const baseStructure = classifyOffensiveStructure(selectedPlay, authoritativeKnowledge?.authoritative || selectedPlay.authoritativeStructure || null);
+  const capabilities = adjustmentCapabilities(selectedPlay, authoritativeKnowledge);
   const baseGrade = gradePlay({
     play: selectedPlay,
     structure: baseStructure,
@@ -336,10 +339,11 @@ function advisePreSnapCoordinator({
         : 'Current play remains a structurally valid answer to the revealed defense.'],
       confidence: defense.provenance === 'DERIVED_STRUCTURAL' ? 'HIGH' : 'MEDIUM',
       source: 'COUNTER_MODEL',
+      capabilities,
     });
   }
 
-  const protector = pressure ? protectors[0] || null : null;
+  const protector = pressure && capabilities.canAdjustProtection ? protectors[0] || null : null;
   if (protector && pressure && baseGrade.counter?.gate?.valid !== false && baseGrade.fit >= 0.05) {
     const protectedIndexes = new Set([Number(protector.playerIndex)]);
     return makeResult({
@@ -361,11 +365,12 @@ function advisePreSnapCoordinator({
       ],
       confidence: 'MEDIUM',
       source: 'EA_ASSIGNMENT+DERIVED_DEFENSE_STRUCTURE',
+      capabilities,
     });
   }
 
   const excluded = new Set();
-  const hot = bestHotRoute({
+  const hot = capabilities.canHotRoute ? bestHotRoute({
     routes,
     excludedPlayerIndexes: excluded,
     baseStructure,
@@ -376,7 +381,7 @@ function advisePreSnapCoordinator({
     situation,
     performanceStore,
     defensiveCall,
-  });
+  }) : null;
 
   if (hot && (!pressure || !protector)) {
     return makeResult({
@@ -403,10 +408,11 @@ function advisePreSnapCoordinator({
       ],
       confidence: 'MEDIUM',
       source: 'HOT_ROUTE_CONFIG+COUNTER_MODEL',
+      capabilities,
     });
   }
 
-  if (pressure && protector) {
+  if (pressure && protector && capabilities.canHotRoute) {
     const protectedIndexes = new Set([Number(protector.playerIndex)]);
     const combinedHot = bestHotRoute({
       routes,
@@ -447,6 +453,7 @@ function advisePreSnapCoordinator({
         ],
         confidence: 'MEDIUM',
         source: 'EA_ASSIGNMENT+HOT_ROUTE_CONFIG+COUNTER_MODEL',
+        capabilities,
       });
     }
   }
@@ -490,6 +497,7 @@ function advisePreSnapCoordinator({
       ],
       confidence: 'MEDIUM',
       source: 'FORMATION_AUDIBLE_PACKAGE+COUNTER_MODEL',
+      capabilities,
     });
   }
 
@@ -501,12 +509,15 @@ function advisePreSnapCoordinator({
     audiblePackage,
     authoritativeKnowledge,
     reasons: [
-      audiblePackage?.available && audiblePackage.confirmed !== true
-        ? 'The formation audible package is planned but not confirmed to match the in-game audible slots, so the coordinator refuses to recommend an audible.'
-        : 'No smaller adjustment or formation-specific audible has enough supported structural advantage to justify changing the call.',
+      !capabilities.canHotRoute
+        ? capabilities.hotRouteReason
+        : (audiblePackage?.available && audiblePackage.confirmed !== true
+          ? 'The formation audible package is planned but not confirmed to match the in-game audible slots, so the coordinator refuses to recommend an audible.'
+          : 'No smaller adjustment or formation-specific audible has enough supported structural advantage to justify changing the call.'),
     ],
     confidence: 'LOW',
     source: 'INSUFFICIENT_EVIDENCE',
+    capabilities,
   });
 }
 

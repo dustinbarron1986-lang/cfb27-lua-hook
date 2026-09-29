@@ -1,3 +1,4 @@
+const { strategicPlayScore } = require("../gameplan/strategic-context");
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
@@ -99,6 +100,12 @@ function scoreSituation(play, situation = {}) {
 
   if (flags.fourMinute && isRun(play)) {
     score += 0.8; reasons.push("four-minute context rewards possession and clock pressure");
+  }
+
+  const strategic = strategicPlayScore(play, situation);
+  if (strategic.score) {
+    score += strategic.score * 1.25;
+    reasons.push(...strategic.reasons);
   }
 
   // Conservative turnover/risk proxy from tags.

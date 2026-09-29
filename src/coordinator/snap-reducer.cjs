@@ -14,7 +14,7 @@ function validState(raw) {
   const fieldX = finite(raw.fieldX);
   const lineToGain = finite(raw.lineToGain);
   return down != null && down >= 1 && down <= 4 &&
-    quarter != null && quarter >= 1 && quarter <= 8 &&
+    quarter != null && quarter >= 1 && quarter <= 20 &&
     gameClock != null && gameClock >= 0 &&
     playClock != null && playClock >= 0 &&
     fieldX != null && lineToGain != null;
