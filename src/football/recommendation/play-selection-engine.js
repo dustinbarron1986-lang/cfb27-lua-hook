@@ -1,6 +1,7 @@
 const { scoreSituation } = require("./situation-scorer");
 const { evaluateOffensiveCandidate } = require("./counter-model");
 const { objectiveFit } = require("../gameplan/drive-objective");
+const { hashGeometryScore } = require("../analysis/hash-geometry");
 
 function mean(values) {
   const nums = values.filter(v => Number.isFinite(v));
@@ -177,6 +178,7 @@ class PlaySelectionEngine {
         ? this.empiricalPrior.routeCoverageEvidence(normalizedProfile, defensePlay || {})
         : { available:false, score:0 };
       const objectivePart = objectiveFit(normalizedProfile, driveObjective?.objective);
+      const hashPart = hashGeometryScore(play, situation, null);
       const intentPart = this.sequences?.candidateIntentFit
         ? this.sequences.candidateIntentFit(play, sequenceIntent, plays)
         : { aligned:false, tier:0 };
@@ -228,6 +230,7 @@ class PlaySelectionEngine {
         risk: riskPenalty,
         empiricalSituationPrior: empiricalSituation.available ? empiricalSituation.score : 0,
         driveObjectiveFit: objectivePart.score,
+        hashGeometry: hashPart.score,
         selfScoutValue: selfScoutPart.score,
         gameplanFit: strategyPart.components?.gameplanFit || 0,
         callSheetMembership: strategyPart.components?.callSheetMembership || 0,
@@ -261,6 +264,7 @@ class PlaySelectionEngine {
         ...recommendationPenalty.reasons,
         ...(empiricalSituation.available ? [`empirical situation prior ${empiricalSituation.rowId}: ${empiricalSituation.mode} edge ${empiricalSituation.score >= 0 ? '+' : ''}${empiricalSituation.score}`] : []),
         ...objectivePart.reasons.map(r => `drive objective: ${r}`),
+        ...(hashPart.available && hashPart.reason ? [`hash geometry: ${hashPart.reason}`] : []),
         ...(intentPart.reason ? [`sequence: ${intentPart.reason}`] : []),
         ...(selfScoutPart.reason ? [`self-scout: ${selfScoutPart.reason}`] : []),
         ...(strategyPart.planReasons || []).map(r => `gameplan: ${r}`),
@@ -301,6 +305,7 @@ class PlaySelectionEngine {
           sequenceFit: intentPart,
           selfScout: selfScoutPart.scout,
           normalizedProfile,
+          hashGeometry: hashPart,
           empiricalSituation,
           empiricalCoverage,
           totalComponents: components

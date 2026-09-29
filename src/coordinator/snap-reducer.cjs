@@ -35,6 +35,7 @@ function normalizeState(raw) {
     yardsToGainExact: finite(raw.yardsToGainExact),
     fieldX: finite(raw.fieldX),
     fieldY: finite(raw.fieldY),
+    hash: raw.hash || "unknown",
     lineToGain: finite(raw.lineToGain),
     yardLine: finite(raw.yardLine),
   };

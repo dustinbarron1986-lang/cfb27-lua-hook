@@ -3,9 +3,11 @@
 const { classifyOffensiveStructure, classifyDefensiveStructure, normalize } = require('../analysis/structural-threat-model');
 const { evaluateOffensiveCandidate, desiredOffensiveThreats } = require('./counter-model');
 const { adjustmentCapabilities } = require('./play-adjustment-capabilities');
+const { flipRecommendation } = require('../analysis/hash-geometry');
 
 const ACTION = Object.freeze({
   STAY: 'STAY',
+  FLIP: 'FLIP',
   PROTECTION: 'PROTECTION',
   HOT_ROUTE: 'HOT_ROUTE',
   PROTECTION_HOT_ROUTE: 'PROTECTION_HOT_ROUTE',
@@ -318,10 +320,29 @@ function advisePreSnapCoordinator({
   });
   const routes = authoritativeRoutes(authoritativeKnowledge);
   const protectors = eligibleProtectors(authoritativeKnowledge);
+  const flip = flipRecommendation(selectedPlay, situation || {}, authoritativeKnowledge?.authoritative || null);
   const pressure = Boolean(defense.pressure);
   const quickAnswer = (baseStructure.threatKeys || []).some(key =>
     ['quick_horizontal', 'screen', 'perimeter_access', 'crossing'].includes(key)
   );
+
+  if (baseGrade.valid && flip.recommend && !pressure) {
+    return makeResult({
+      action: { type: ACTION.FLIP, label: 'FLIP PLAY — ' + flip.targetSide + ' / FIELD SIDE', targetSide: flip.targetSide },
+      baseGrade,
+      finalGrade: { ...baseGrade, hashGeometry: flip.current, flipGain: flip.gain },
+      defenseProfile,
+      audiblePackage,
+      authoritativeKnowledge,
+      reasons: [
+        flip.reason,
+        'Flip preserves the called concept and sequence rather than abandoning the plan for a different play.',
+      ],
+      confidence: flip.confidence,
+      source: flip.provenance,
+      capabilities,
+    });
+  }
 
   if (baseGrade.valid && (
     (!pressure && baseGrade.fit >= 0.42) ||

@@ -84,11 +84,19 @@ function situationFromState(state) {
   const base = {
     down: state.down,
     distance: state.distance,
-    yardLine: state.yardLine,
     quarter: state.quarter,
     clockSeconds: state.gameClockSeconds,
     playClockSeconds: state.playClockSeconds,
     possession: state.possession,
+    fieldX: state.fieldX,
+    fieldY: state.fieldY,
+    lineToGain: state.lineToGain,
+    yardLine: state.yardLine,
+    yardsToGoal: Number.isFinite(Number(state.yardLine)) ? Math.max(0, 100 - Number(state.yardLine)) : null,
+    hash: state.hash || 'unknown',
+    offenseDirection: Number.isFinite(Number(state.lineToGain)) && Number.isFinite(Number(state.fieldX)) && Math.abs(Number(state.lineToGain) - Number(state.fieldX)) > 0.01
+      ? Math.sign(Number(state.lineToGain) - Number(state.fieldX))
+      : null,
     offenseScore,
     defenseScore,
     scoreDifferential: hasDirectDiff
@@ -786,6 +794,14 @@ function snapToFootballEvent(snap, playbooks) {
     down: snap.start.down,
     distance: snap.start.distance,
     yardLine: snap.start.yardLine,
+    yardsToGoal: Number.isFinite(Number(snap.start.yardLine)) ? Math.max(0, 100 - Number(snap.start.yardLine)) : null,
+    fieldX: snap.start.fieldX,
+    fieldY: snap.start.fieldY,
+    lineToGain: snap.start.lineToGain,
+    hash: snap.start.hash || 'unknown',
+    offenseDirection: Number.isFinite(Number(snap.start.lineToGain)) && Number.isFinite(Number(snap.start.fieldX)) && Math.abs(Number(snap.start.lineToGain) - Number(snap.start.fieldX)) > 0.01
+      ? Math.sign(Number(snap.start.lineToGain) - Number(snap.start.fieldX))
+      : null,
     quarter: snap.start.quarter,
     clockSeconds: snap.start.gameClockSeconds,
     playClockSeconds: snap.start.playClockSeconds,
