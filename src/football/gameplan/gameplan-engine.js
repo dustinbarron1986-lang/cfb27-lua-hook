@@ -918,18 +918,32 @@ class GameplanEngine {
     const runLikeShare = neutralTotal ? runLikeNeutral / neutralTotal : null;
     let identityCorrection = 0;
     const identityReasons = [];
-    if (this.active.gameplan.id === 'ground_control' && isNeutralSituation(situation) && neutralTotal >= 4) {
-      const targetFloor = 0.52;
-      const deficit = Math.max(0, targetFloor - Number(runLikeShare || 0));
-      if (deficit > 0) {
-        if (desc.runLike) identityCorrection = Math.min(1.4, deficit * 3.4);
-        else if (desc.typeFamily === 'pass' && !desc.isPlayAction) identityCorrection = -Math.min(0.65, deficit * 1.4);
-        if (Math.abs(identityCorrection) >= 0.08) {
+    if (this.active.gameplan.id === 'ground_control' && isNeutralSituation(situation)) {
+      // Ground Control must express a run-first identity from snap one, not
+      // only after enough history exists to detect drift. This is a modest
+      // baseline preference inside the already situation/counter-valid pool.
+      if (desc.runLike) identityCorrection += 0.78;
+      else if (desc.isPlayAction) identityCorrection += 0.16;
+      else if (desc.typeFamily === 'pass') identityCorrection -= 0.28;
+
+      if (neutralTotal >= 4) {
+        const targetFloor = 0.52;
+        const deficit = Math.max(0, targetFloor - Number(runLikeShare || 0));
+        if (deficit > 0) {
+          if (desc.runLike) identityCorrection += Math.min(1.4, deficit * 3.4);
+          else if (desc.typeFamily === 'pass' && !desc.isPlayAction) identityCorrection -= Math.min(0.65, deficit * 1.4);
           identityReasons.push(
             'Ground Control neutral run/run-hybrid mix is ' + Math.round((runLikeShare || 0) * 100) +
             '%; soft identity correction rewards valid run-like answers without overriding situation gates.'
           );
         }
+      }
+      if (!identityReasons.length && Math.abs(identityCorrection) >= 0.08) {
+        identityReasons.push(
+          desc.runLike
+            ? 'Ground Control neutral identity gives valid run/run-hybrid calls a baseline strategic preference.'
+            : 'Ground Control neutral identity modestly discounts ordinary passes unless situation/counter evidence justifies them.'
+        );
       }
     }
     const components = {
