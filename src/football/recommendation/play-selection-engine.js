@@ -1,5 +1,6 @@
 const { scoreSituation } = require("./situation-scorer");
 const { evaluateOffensiveCandidate } = require("./counter-model");
+const { objectiveFit } = require("../gameplan/drive-objective");
 
 function mean(values) {
   const nums = values.filter(v => Number.isFinite(v));
@@ -136,18 +137,24 @@ function counterFamily(counter, play) {
 }
 
 class PlaySelectionEngine {
-  constructor({ store, sequences, tendencies, knowledge = null, recommendationHistory = null, strategy = null }) {
+  constructor({ store, sequences, tendencies, knowledge = null, recommendationHistory = null, strategy = null, driveObjectives = null, selfScout = null, empiricalPrior = null, offensiveProfiles = null }) {
     this.store = store;
     this.sequences = sequences;
     this.tendencies = tendencies;
     this.knowledge = knowledge;
     this.recommendationHistory = recommendationHistory;
     this.strategy = strategy;
+    this.driveObjectives = driveObjectives;
+    this.selfScout = selfScout;
+    this.empiricalPrior = empiricalPrior;
+    this.offensiveProfiles = offensiveProfiles;
   }
 
   rank({ playbook, situation, defensePlay = null, limit = 5 }) {
     const plays = normalizePlaybook(playbook);
     const tendency = this.tendencies.summarize(situation);
+    const driveObjective = this.driveObjectives?.get ? this.driveObjectives.get(situation) : null;
+    const sequenceIntent = this.sequences?.intent ? this.sequences.intent(plays) : null;
     const events = this.store.getAll();
     const oracle = Boolean(defensePlay?.name || defensePlay?.coverageFamily || defensePlay?.assignmentFamilies?.length);
     // Both OC stages use the shared structural counter model. Before the exact
@@ -157,8 +164,25 @@ class PlaySelectionEngine {
     const defenseProfile = this.tendencies.recentDefensiveStructures(defensePlay || null);
     const historicalStructureAvailable = !oracle && defenseProfile.sampleSize >= 2;
 
-    const evaluated = plays.map(play => {
+    const evaluated = plays.map(originalPlay => {
+      const normalizedProfile = this.offensiveProfiles?.profile
+        ? this.offensiveProfiles.profile(originalPlay)
+        : (originalPlay.normalizedProfile || {});
+      const play = { ...originalPlay, normalizedProfile };
       const situationPart = scoreSituation(play, situation);
+      const empiricalSituation = this.empiricalPrior?.situationEvidence
+        ? this.empiricalPrior.situationEvidence(situation, normalizedProfile)
+        : { available:false, score:0 };
+      const empiricalCoverage = oracle && this.empiricalPrior?.routeCoverageEvidence
+        ? this.empiricalPrior.routeCoverageEvidence(normalizedProfile, defensePlay || {})
+        : { available:false, score:0 };
+      const objectivePart = objectiveFit(normalizedProfile, driveObjective?.objective);
+      const intentPart = this.sequences?.candidateIntentFit
+        ? this.sequences.candidateIntentFit(play, sequenceIntent, plays)
+        : { aligned:false, tier:0 };
+      const selfScoutPart = !oracle && this.selfScout?.candidateValue
+        ? this.selfScout.candidateValue(play)
+        : { score:0, reason:null, scout:null };
       const tendencyPart = this.tendencies.scoreCandidate(play, tendency);
       const performancePart = performanceScore(this.store, play, situation);
       const setupPart = setupScore(this.sequences, this.store, play);
@@ -189,6 +213,7 @@ class PlaySelectionEngine {
         executionRepetition: executionRepetition * 0.35,
         recommendationRepetition: recommendationPenalty.score,
         risk: riskPenalty,
+        empiricalCoveragePrior: empiricalCoverage.available ? empiricalCoverage.score * 0.75 : 0,
       } : {
         // Stage 1 remains counter-first, but the counter evidence comes from
         // prior defensive structure rather than a not-yet-known exact call.
@@ -201,6 +226,9 @@ class PlaySelectionEngine {
         executionRepetition,
         recommendationRepetition: recommendationPenalty.score,
         risk: riskPenalty,
+        empiricalSituationPrior: empiricalSituation.available ? empiricalSituation.score : 0,
+        driveObjectiveFit: objectivePart.score,
+        selfScoutValue: selfScoutPart.score,
         gameplanFit: strategyPart.components?.gameplanFit || 0,
         callSheetMembership: strategyPart.components?.callSheetMembership || 0,
         gameplanMixAccountability: strategyPart.components?.gameplanMixAccountability || 0,
@@ -220,6 +248,7 @@ class PlaySelectionEngine {
         ...performancePart.reasons.map(r => `secondary execution evidence: ${r}`),
         ...saturation.reasons,
         ...recommendationPenalty.reasons,
+        ...(empiricalCoverage.available ? [`empirical route/coverage prior: ${empiricalCoverage.route || 'route'} vs ${empiricalCoverage.coverage || empiricalCoverage.shell || 'shell'}`] : []),
       ] : [
         ...(historicalStructureAvailable
           ? counter.reasons.map(r => r.replace('punishes current defense with:', 'historical defensive profile favors:'))
@@ -230,6 +259,10 @@ class PlaySelectionEngine {
         ...setupPart.reasons,
         ...saturation.reasons,
         ...recommendationPenalty.reasons,
+        ...(empiricalSituation.available ? [`empirical situation prior ${empiricalSituation.rowId}: ${empiricalSituation.mode} edge ${empiricalSituation.score >= 0 ? '+' : ''}${empiricalSituation.score}`] : []),
+        ...objectivePart.reasons.map(r => `drive objective: ${r}`),
+        ...(intentPart.reason ? [`sequence: ${intentPart.reason}`] : []),
+        ...(selfScoutPart.reason ? [`self-scout: ${selfScoutPart.reason}`] : []),
         ...(strategyPart.planReasons || []).map(r => `gameplan: ${r}`),
         ...(strategyPart.reasons || []).map(r => `strategy: ${r}`),
       ];
@@ -241,7 +274,12 @@ class PlaySelectionEngine {
         reasons,
         tendencyContext: tendency,
         exactDefense: defensePlay,
+        intentTier: Number(intentPart.tier || 0),
+        sequenceIntent,
+        driveObjective,
         strategicWhy: [
+          ...(sequenceIntent?.reason ? [sequenceIntent.reason] : []),
+          ...(driveObjective?.reason ? [driveObjective.reason] : []),
           ...(strategyPart.planReasons || []),
           ...(strategyPart.reasons || []),
         ].slice(0, 3),
@@ -258,6 +296,13 @@ class PlaySelectionEngine {
           usageSaturation: saturation,
           recommendationExposure: recommendationPenalty,
           strategy: strategyPart,
+          driveObjective,
+          sequenceIntent,
+          sequenceFit: intentPart,
+          selfScout: selfScoutPart.scout,
+          normalizedProfile,
+          empiricalSituation,
+          empiricalCoverage,
           totalComponents: components
         },
         selectionPolicy: oracle ? "exact_defense_oracle_counter_first" : "pre_call_no_current_exact_defense"
@@ -275,14 +320,31 @@ class PlaySelectionEngine {
       pool = counterValid.length ? counterValid : situationValid;
     }
 
-    const ranked = pool.sort((a,b) => {
+    const byScore = [...pool].sort((a,b) => {
       if (b.score !== a.score) return b.score - a.score;
       return String(a.play?.id || a.play?.name || '').localeCompare(String(b.play?.id || b.play?.name || ''));
     });
+    let ranked = byScore;
+    if (!oracle && sequenceIntent && byScore.length) {
+      const aligned = byScore.filter(row => row.intentTier > 0);
+      const bestOverall = Number(byScore[0]?.score || 0);
+      const viableAligned = aligned.filter(row => Number(row.score) >= bestOverall - 2.0);
+      if (viableAligned.length) {
+        const preferred = viableAligned.sort((a,b) => {
+          if (b.intentTier !== a.intentTier) return b.intentTier - a.intentTier;
+          return b.score - a.score;
+        });
+        const preferredIds = new Set(preferred.map(row => String(row.play?.id)));
+        ranked = [...preferred, ...byScore.filter(row => !preferredIds.has(String(row.play?.id)))];
+      }
+    }
 
     return {
       situation,
       tendency,
+      driveObjective,
+      sequenceIntent,
+      selfScout: this.selfScout?.summarize ? this.selfScout.summarize() : null,
       exactDefense: defensePlay,
       defenseProfile,
       recommendations: ranked.slice(0, limit),

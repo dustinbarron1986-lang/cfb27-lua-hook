@@ -10,6 +10,10 @@ const { KnowledgeEngine } = require("./knowledge/knowledge-engine");
 const { classifyOffensiveStructure, classifyDefensiveStructure } = require("./analysis/structural-threat-model");
 const { AudiblePackageStore } = require("./recommendation/audible-package-store");
 const { GameplanEngine } = require("./gameplan/gameplan-engine");
+const { DriveObjectiveTracker } = require("./gameplan/drive-objective");
+const { SelfScout } = require("./memory/self-scout");
+const { EmpiricalPrior } = require("./recommendation/empirical-prior");
+const { OffensiveProfileProvider } = require("./analysis/offensive-profile");
 
 let DatabasePlaybookRepository = null;
 try {
@@ -36,6 +40,10 @@ class FootballEngine {
       targetSize: options.callSheetTargetSize || 80,
     });
     this.sequences = new SequenceMemory(this.performance);
+    this.driveObjectives = options.driveObjectiveTracker || new DriveObjectiveTracker();
+    this.selfScout = options.selfScout || new SelfScout(this.performance);
+    this.empiricalPrior = options.empiricalPrior || new EmpiricalPrior(options.empiricalPriorOptions || {});
+    this.offensiveProfiles = options.offensiveProfileProvider || new OffensiveProfileProvider({ eaPlayKnowledgeStore: options.eaPlayKnowledgeStore || options.executionAdvisor?.eaPlayKnowledgeStore || null });
     this.knowledge = options.knowledge || new KnowledgeEngine(options.knowledgeOptions || {});
     this.recommendationHistory = options.recommendationHistory || new RecommendationHistory();
     this.tendencies = new OpponentTendencies(this.performance, { knowledge: this.knowledge });
@@ -45,7 +53,11 @@ class FootballEngine {
       tendencies: this.tendencies,
       knowledge: this.knowledge,
       recommendationHistory: this.recommendationHistory,
-      strategy: this.gameplans
+      strategy: this.gameplans,
+      driveObjectives: this.driveObjectives,
+      selfScout: this.selfScout,
+      empiricalPrior: this.empiricalPrior,
+      offensiveProfiles: this.offensiveProfiles
     });
 
     this.executionAdvisor = new ExecutionAdvisor({
@@ -90,6 +102,7 @@ class FootballEngine {
       defense: gradeDefensivePlay(enriched)
     };
     this.performance.record(enriched);
+    this.driveObjectives.observe(enriched.situation || {});
     this.gameplans.record(enriched);
     return enriched;
   }
@@ -144,24 +157,24 @@ class FootballEngine {
   }
 
   recommendPlays({ playbook, defensePlay = null, situation, limit = 5 }) {
-    // The gameplan/call-sheet layer exists ABOVE the exact-defense Oracle.
-    // Stage 1 (defense unknown) scopes the candidate pool to the active call
-    // sheet + current situation. Oracle receives the already-called play and
-    // its confirmed audible package, so it must not be re-scoped here.
+    // Full-playbook eligibility is intentional. The gameplan/call-sheet artifact
+    // remains useful for UI/review compatibility, but it no longer hard-whitelists
+    // Stage-1 candidates. Intent and situation dynamically prioritize the whole book.
     const normalizedDefense = defensePlay ? this._withObservedFamily(defensePlay, "defense") : null;
-    const scoped = normalizedDefense
-      ? { playbook, meta: { applied: false, reason: "Exact-defense downstream stage." } }
-      : this.gameplans.scopePlaybook(playbook, situation);
     const ranked = this.playSelection.rank({
-      playbook: scoped.playbook,
+      playbook,
       defensePlay: normalizedDefense,
       situation,
       limit
     });
     return {
       ...ranked,
-      gameplan: scoped.meta?.applied ? this.gameplans.summary() : null,
-      callSheet: scoped.meta || null,
+      gameplan: this.gameplans.summary?.() || null,
+      callSheet: {
+        applied: false,
+        reason: "Full selected playbook remains eligible; call sheet is advisory/diagnostic only.",
+        eligible: Array.isArray(playbook?.plays) ? playbook.plays.length : 0,
+      },
     };
   }
 
