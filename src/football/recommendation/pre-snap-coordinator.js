@@ -222,10 +222,9 @@ function rankAudibles({ audiblePackage, playbook, formation, defenseProfile, kno
     .sort((a, b) => {
       const structuralGap = Number(b.grade.structuralScore) - Number(a.grade.structuralScore);
       if (Math.abs(structuralGap) >= 0.5) return structuralGap;
-      if (b.grade.total !== a.grade.total) return b.grade.total - a.grade.total;
-      if (b.intentPreservation.score !== a.intentPreservation.score) {
-        return b.intentPreservation.score - a.intentPreservation.score;
-      }
+      const aIntentTotal = Number(a.grade.total) + Number(a.intentPreservation.score || 0);
+      const bIntentTotal = Number(b.grade.total) + Number(b.intentPreservation.score || 0);
+      if (bIntentTotal !== aIntentTotal) return bIntentTotal - aIntentTotal;
       return String(a.slot.slot).localeCompare(String(b.slot.slot));
     });
 }
@@ -335,7 +334,6 @@ function advisePreSnapCoordinator({
     situation,
     performanceStore,
     defensiveCall,
-    selectedPlay,
   });
   const routes = authoritativeRoutes(authoritativeKnowledge);
   const protectors = eligibleProtectors(authoritativeKnowledge);
