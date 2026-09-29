@@ -18,12 +18,17 @@ function unique(values) {
 
 function trailingUserDrive(events) {
   const rows = [];
+  if (!events.length) return rows;
+
+  // A drive is a contiguous possession block. If the most recent recorded
+  // snap belongs to the opponent, the user's next drive has not recorded a
+  // snap yet and prior-drive sequence exposure must not leak forward.
+  const latestPossession = Number(events[events.length - 1]?.situation?.possession);
+  if (Number.isFinite(latestPossession) && latestPossession !== 0) return rows;
+
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const event = events[i];
-    if (Number(event?.situation?.possession) !== 0) {
-      if (rows.length) break;
-      continue;
-    }
+    if (Number(event?.situation?.possession) !== 0) break;
     rows.unshift(event);
   }
   return rows;
@@ -43,6 +48,10 @@ function eventPresentation(event = {}) {
     family: playFamily(play),
     decisionClass: profile.decisionClass || String(play.type || '').toLowerCase() || null,
     mechanism: profile.playMechanism || null,
+    direction: play.runDirection || play.direction || play.side || null,
+    hash: event.situation?.hash || null,
+    fieldSide: event.situation?.fieldSide || event.situation?.hashGeometry?.fieldSide || null,
+    boundarySide: event.situation?.boundarySide || event.situation?.hashGeometry?.boundarySide || null,
     success: Boolean(event.grades?.offense?.situationalSuccess),
   };
 }
