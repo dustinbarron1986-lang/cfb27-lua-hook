@@ -101,3 +101,17 @@ test('sequence presentation retains direction and resulting hash context', () =>
   assert.equal(state.rows[0].hash, 'LEFT_HASH');
   assert.equal(state.rows[0].fieldSide, 'RIGHT');
 });
+
+
+test('self scout records direction, mechanism, hash, and field-boundary presentation', () => {
+  const row = event({ ...run('r1'), runDirection: 'RIGHT' });
+  row.play.normalizedProfile.playMechanism = 'option';
+  row.situation.hash = 'LEFT_HASH';
+  row.situation.fieldSide = 'RIGHT';
+  row.situation.boundarySide = 'LEFT';
+  const scout = new SelfScout(new PerformanceStore([row])).summarize();
+  assert.equal(scout.directionByFormation['Singleback Bunch'].RIGHT, 1);
+  assert.equal(scout.mechanisms.option, 1);
+  assert.equal(scout.hashes.LEFT_HASH, 1);
+  assert.equal(scout.fieldBoundary.FIELD, 1);
+});
