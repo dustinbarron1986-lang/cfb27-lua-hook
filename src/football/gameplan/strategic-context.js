@@ -30,7 +30,7 @@ function fourMinuteStrength(situation = {}) {
   const diff = finite(situation.scoreDifferential);
   if (q == null || q < 4 || clock == null || diff == null || diff <= 0) return 0;
   // Begins gently outside four minutes and ramps hard with lead size/time.
-  const time = clock <= 240 ? 1 : clock <= 360 ? 0.55 : clock <= 720 ? 0.18 : 0;
+  const time = clock <= 240 ? 1 : clock <= 360 ? 0.78 : clock <= 720 ? 0.18 : 0;
   const lead = diff >= 14 ? 1 : diff >= 8 ? 0.72 : diff >= 4 ? 0.45 : 0.25;
   return Math.max(0, Math.min(1, time * lead));
 }

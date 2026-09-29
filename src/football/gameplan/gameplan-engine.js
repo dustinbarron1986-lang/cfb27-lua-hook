@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { getGameplan, listGameplans } = require('./gameplan-definitions');
 const { classifyOffensiveStructure, normalize } = require('../analysis/structural-threat-model');
+const { strategicPlayScore, describeRisk } = require('./strategic-context');
 
 const DEFAULT_TARGET_SIZE = 80;
 const MIN_SITUATION_POOL = 12;
@@ -150,10 +151,15 @@ function gameplanFit(playOrDescription, gameplan) {
     contribution(rows, 'modifier:' + key, weight, weight ? plan.name + ' values ' + key.replaceAll('_', ' ').toLowerCase() + '.' : null);
   }
 
+  const conceptTokens = new Set([
+    ...(desc.play?.concepts || []),
+    desc.play?.primaryConcept,
+    desc.play?.conceptFamily,
+  ].filter(Boolean).map(normalize));
   for (const [needle, weight] of Object.entries(plan.conceptWeights || {})) {
     const normalizedNeedle = normalize(needle);
-    if (normalizedNeedle && desc.text.includes(normalizedNeedle)) {
-      contribution(rows, 'concept:' + needle, Number(weight) || 0, plan.name + ' core concept match: ' + needle.replaceAll('_', ' ') + '.');
+    if (normalizedNeedle && conceptTokens.has(normalizedNeedle)) {
+      contribution(rows, 'concept:' + needle, Number(weight) || 0, plan.name + ' exact canonical concept match: ' + needle.replaceAll('_', ' ') + '.');
     }
   }
 
@@ -170,7 +176,7 @@ function gameplanFit(playOrDescription, gameplan) {
 }
 
 function staticSituationTags(desc) {
-  const tags = new Set(['NORMAL_EARLY_DOWN', 'SECOND_MEDIUM']);
+  const tags = new Set(['NORMAL_EARLY_DOWN']);
   const threats = new Set(desc.threatKeys);
   const passLike = desc.typeFamily === 'pass' || desc.typeFamily === 'screen' || desc.typeFamily === 'hybrid';
   const safeShort = desc.runLike || threats.has('quick_horizontal') || threats.has('crossing') || threats.has('screen');
@@ -180,6 +186,7 @@ function staticSituationTags(desc) {
   );
 
   if (desc.runLike || desc.isPlayAction || desc.isShot) tags.add('SECOND_SHORT');
+  if (safeShort || threats.has('intermediate_middle') || threats.has('flood')) tags.add('SECOND_MEDIUM');
   if (passLike || threats.has('screen')) tags.add('SECOND_LONG');
   if (safeShort) tags.add('THIRD_SHORT');
   if (conversion || desc.runLike) tags.add('THIRD_MEDIUM');
@@ -194,13 +201,29 @@ function staticSituationTags(desc) {
   if (passLike && (threats.has('quick_horizontal') || threats.has('crossing') || threats.has('perimeter_access') || threats.has('flood'))) {
     tags.add('TWO_MINUTE');
   }
-  if (desc.runLike || threats.has('quick_horizontal')) tags.add('FOUR_MINUTE');
+  const risk = describeRisk(desc.play);
+  if (risk.runLike || risk.possessionPass) tags.add('FOUR_MINUTE');
   if (desc.isShot) tags.add('SHOT_PLAY');
   if (desc.pressureAnswer) tags.add('PRESSURE_ANSWER');
   if (desc.constraint) tags.add('CHANGEUP_CONSTRAINT');
   if (desc.isPlayAction || desc.isDoubleMove || desc.isShot) tags.add('SETUP_PAYOFF');
 
   return [...tags];
+}
+
+function isStrongSituationBucket(bucket) {
+  return ['THIRD_LONG','FOURTH_SHORT','RED_ZONE','LOW_RED_ZONE','BACKED_UP','TWO_MINUTE','FOUR_MINUTE','END_GAME'].includes(bucket);
+}
+
+function isNeutralSituation(situation = {}) {
+  const flags = situation.flags || {};
+  const down = Number(situation.down || 0);
+  const distance = Number(situation.distance || 0);
+  return (down === 1 || down === 2) &&
+    distance > 0 && distance <= 8 &&
+    !flags.redZone && !flags.goalToGo && !flags.backedUp &&
+    !flags.twoMinute && !flags.fourMinute &&
+    !flags.trailingLate && !flags.leadingLate;
 }
 
 function situationBuckets(situation = {}) {
@@ -553,6 +576,7 @@ class SetupState {
       success: Boolean(event.grades?.offense?.situationalSuccess),
       yards: Number(event.result?.yards || 0),
       defenseFamily: event.opponentPlay?.coverageFamily || event.opponentPlay?.structural?.coverageFamily || null,
+      neutral: isNeutralSituation(event.situation || {}),
     };
     this.rows.push(row);
     return row;
@@ -569,23 +593,27 @@ class SetupState {
     };
     const reasons = [];
 
-    const successfulRuns = sameFormation.filter(row => row.runLike && row.success);
+    const paRelations = (entry?.relationships || []).filter(rel => rel.type === 'PLAY_ACTION_PAYOFF');
+    const paSetupIds = new Set(paRelations.map(rel => String(rel.setupPlayId)));
+    const successfulRuns = sameFormation.filter(row => row.runLike && row.success && paSetupIds.has(String(row.playId)));
     if (desc.isPlayAction && successfulRuns.length >= 2) {
       components.setupValue += Math.min(1.25, 0.30 * successfulRuns.length);
       components.payoffValue += Math.min(0.45, 0.10 * successfulRuns.length);
-      const confidence = entry?.relationships?.find(rel => rel.type === 'PLAY_ACTION_PAYOFF')?.confidence || 'LOW';
+      const confidence = paRelations[0]?.confidence || 'LOW';
       reasons.push(
-        successfulRuns.length + ' successful run calls from ' + desc.formation +
-        ' have established run tendency; PA payoff relationship confidence=' + confidence + '.'
+        successfulRuns.length + ' successful RELATED run calls from ' + desc.formation +
+        ' have established this PA payoff; relationship confidence=' + confidence + '.'
       );
     }
 
-    const shortRoutes = sameFormation.filter(row => row.shortRoute);
+    const doubleRelations = (entry?.relationships || []).filter(rel => rel.type === 'DOUBLE_MOVE_PAYOFF');
+    const shortSetupIds = new Set(doubleRelations.map(rel => String(rel.setupPlayId)));
+    const shortRoutes = sameFormation.filter(row => row.shortRoute && shortSetupIds.has(String(row.playId)));
     if (desc.isDoubleMove && shortRoutes.length >= 2) {
       components.payoffValue += Math.min(1.15, 0.28 * shortRoutes.length);
-      const confidence = entry?.relationships?.find(rel => rel.type === 'DOUBLE_MOVE_PAYOFF')?.confidence || 'LOW';
+      const confidence = doubleRelations[0]?.confidence || 'LOW';
       reasons.push(
-        shortRoutes.length + ' short/intermediate route presentations from ' + desc.formation +
+        shortRoutes.length + ' RELATED short/intermediate route presentations from ' + desc.formation +
         ' increase double-move payoff value; stem similarity confidence=' + confidence + '.'
       );
     }
@@ -642,11 +670,19 @@ class SetupState {
   summary() {
     const formations = {};
     const concepts = {};
+    const mix = { run: 0, hybrid: 0, pass: 0, screen: 0, playAction: 0, shot: 0 };
+    const neutralMix = { run: 0, hybrid: 0, pass: 0, screen: 0, playAction: 0, shot: 0 };
     for (const row of this.rows) {
       if (row.formation) formations[row.formation] = (formations[row.formation] || 0) + 1;
       if (row.primaryThreat) concepts[row.primaryThreat] = (concepts[row.primaryThreat] || 0) + 1;
+      const target = row.neutral ? neutralMix : null;
+      const family = row.typeFamily === 'hybrid' ? 'hybrid' : row.typeFamily === 'screen' ? 'screen' : row.runLike ? 'run' : 'pass';
+      mix[family] += 1;
+      if (target) target[family] += 1;
+      if (row.isPlayAction) { mix.playAction += 1; if (target) target.playAction += 1; }
+      if (row.isShot) { mix.shot += 1; if (target) target.shot += 1; }
     }
-    return { snaps: this.rows.length, formations, concepts };
+    return { snaps: this.rows.length, formations, concepts, mix, neutralMix, rows: [...this.rows] };
   }
 }
 
@@ -815,9 +851,10 @@ class GameplanEngine {
     const sheet = this.active.sheet;
     const buckets = situationBuckets(situation);
     const entryById = new Map(sheet.entries.map(entry => [String(entry.playId), entry]));
+    const strongContext = buckets.some(isStrongSituationBucket);
     let eligibleEntries = sheet.entries.filter(entry =>
-      entry.tags.includes('CORE_CALL') ||
-      entry.tags.some(tag => buckets.includes(tag))
+      entry.tags.some(tag => buckets.includes(tag)) ||
+      (!strongContext && entry.tags.includes('CORE_CALL'))
     );
     if (eligibleEntries.length < MIN_SITUATION_POOL) {
       const seen = new Set(eligibleEntries.map(entry => String(entry.playId)));
@@ -874,9 +911,32 @@ class GameplanEngine {
     const setup = this.setup.score(play, entry);
     const aggression = aggressionModifier(desc, this.active.gameplan, this.active.aggressiveness, situation);
     const audibleFlexibility = audiblePackageValue(this.audiblePackageStore, this.active.playbookId, play.formation);
+    const strategic = strategicPlayScore(play, situation);
+    const setupSummary = this.setup.summary();
+    const neutralTotal = setupSummary.neutralMix.run + setupSummary.neutralMix.hybrid + setupSummary.neutralMix.pass + setupSummary.neutralMix.screen;
+    const runLikeNeutral = setupSummary.neutralMix.run + setupSummary.neutralMix.hybrid;
+    const runLikeShare = neutralTotal ? runLikeNeutral / neutralTotal : null;
+    let identityCorrection = 0;
+    const identityReasons = [];
+    if (this.active.gameplan.id === 'ground_control' && isNeutralSituation(situation) && neutralTotal >= 4) {
+      const targetFloor = 0.52;
+      const deficit = Math.max(0, targetFloor - Number(runLikeShare || 0));
+      if (deficit > 0) {
+        if (desc.runLike) identityCorrection = Math.min(1.4, deficit * 3.4);
+        else if (desc.typeFamily === 'pass' && !desc.isPlayAction) identityCorrection = -Math.min(0.65, deficit * 1.4);
+        if (Math.abs(identityCorrection) >= 0.08) {
+          identityReasons.push(
+            'Ground Control neutral run/run-hybrid mix is ' + Math.round((runLikeShare || 0) * 100) +
+            '%; soft identity correction rewards valid run-like answers without overriding situation gates.'
+          );
+        }
+      }
+    }
     const components = {
-      gameplanFit: clamp(Number(entry.gameplanScore || 0) * 0.24, -0.5, 1.5),
+      gameplanFit: clamp(Number(entry.gameplanScore || 0) * 0.34, -0.5, 2.1),
       callSheetMembership: 0.18,
+      gameplanMixAccountability: identityCorrection,
+      strategicSituation: strategic.score,
       sequencingValue: setup.components.sequencingValue,
       setupValue: setup.components.setupValue,
       payoffValue: setup.components.payoffValue,
@@ -888,12 +948,21 @@ class GameplanEngine {
       score: Object.values(components).reduce((sum, value) => sum + Number(value || 0), 0),
       components,
       reasons: [
+        ...identityReasons,
+        ...strategic.reasons,
         ...setup.reasons,
         ...aggression.reasons,
         ...(audibleFlexibility >= 0.18 ? ['confirmed formation audible package adds modest tactical flexibility.'] : []),
       ],
       planReasons: entry.planReasons || [],
       entry,
+      identity: {
+        type: String(play.type || play.playKind || '').toUpperCase() || desc.typeFamily.toUpperCase(),
+        core: [...new Set([...(play.concepts || []), play.primaryConcept].filter(Boolean).map(normalize))],
+        threats: desc.threatKeys,
+        provenance: play.authoritativeStructure ? 'AUTHORITATIVE' : (play.concepts?.length ? 'CATALOG' : desc.structure?.provenance || 'HEURISTIC'),
+      },
+      mix: { neutralTotal, runLikeShare },
     };
   }
 
@@ -904,6 +973,30 @@ class GameplanEngine {
   resetSession() {
     this.setup.reset();
     return this.summary();
+  }
+
+  halftimeReview({ performanceStore = null } = {}) {
+    const setup = this.setup.summary();
+    const exact = new Map();
+    for (const row of setup.rows || []) {
+      exact.set(row.playName || row.playId, (exact.get(row.playName || row.playId) || 0) + 1);
+    }
+    const mostUsedPlays = [...exact.entries()].sort((a,b) => b[1]-a[1]).slice(0,5).map(([play, attempts]) => ({ play, attempts }));
+    const repetitionWarnings = mostUsedPlays.filter(row => row.attempts >= 6).map(row => ({
+      play: row.play,
+      attempts: row.attempts,
+      reason: 'Exact play usage is high enough for diminishing-value/repetition review.',
+    }));
+    return {
+      gameplan: this.active?.gameplan?.name || null,
+      mix: setup.mix,
+      neutralMix: setup.neutralMix,
+      formations: setup.formations,
+      concepts: setup.concepts,
+      mostUsedPlays,
+      repetitionWarnings,
+      recommendations: this.review({ performanceStore }),
+    };
   }
 
   review({ performanceStore = null } = {}) {
@@ -970,4 +1063,6 @@ module.exports = {
   generateCallSheet,
   validSheet,
   aggressionModifier,
+  isNeutralSituation,
+  isStrongSituationBucket,
 };
