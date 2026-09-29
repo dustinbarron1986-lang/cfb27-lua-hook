@@ -250,10 +250,9 @@ class PlaySelectionEngine {
         callSheetMembership: strategyPart.components?.callSheetMembership || 0,
         gameplanMixAccountability: strategyPart.components?.gameplanMixAccountability || 0,
         strategicSituation: strategyPart.components?.strategicSituation || 0,
-        sequencingValue: strategyPart.components?.sequencingValue || 0,
-        setupValue: strategyPart.components?.setupValue || 0,
-        payoffValue: strategyPart.components?.payoffValue || 0,
-        tendencyBreakingValue: strategyPart.components?.tendencyBreakingValue || 0,
+        // Sequencing is an upstream intent layer. Legacy strategy components
+        // remain visible in diagnostics below, but are intentionally not added
+        // into the flat candidate total.
         aggression: strategyPart.components?.aggression || 0,
         audibleFlexibility: strategyPart.components?.audibleFlexibility || 0,
       };
@@ -314,6 +313,14 @@ class PlaySelectionEngine {
           usageSaturation: saturation,
           recommendationExposure: recommendationPenalty,
           strategy: strategyPart,
+          legacySequenceScoring: {
+            appliedToTotal: false,
+            sequencingValue: strategyPart.components?.sequencingValue || 0,
+            setupValue: strategyPart.components?.setupValue || 0,
+            payoffValue: strategyPart.components?.payoffValue || 0,
+            tendencyBreakingValue: strategyPart.components?.tendencyBreakingValue || 0,
+            reason: 'Sequence intent is applied upstream through candidateIntentFit, not as additive score.',
+          },
           driveObjective,
           sequenceIntent,
           sequenceFit: intentPart,
