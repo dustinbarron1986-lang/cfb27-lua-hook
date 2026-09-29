@@ -16,7 +16,11 @@ function unique(values) {
 }
 
 function canonicalRoute(value) {
-  const text = normalize(value);
+  const cleaned = String(value || '')
+    .replace(/^AssignRouteType_/i, '')
+    .replace(/^RR_/i, '')
+    .replace(/^RB_/i, '');
+  const text = normalize(cleaned);
   if (!text) return null;
   if (/\bpost\b/.test(text)) return 'post';
   if (/\bcorner\b/.test(text)) return 'corner';

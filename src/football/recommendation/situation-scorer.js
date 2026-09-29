@@ -13,15 +13,17 @@ function isPass(play) { return String(play.type || "").toUpperCase() === "PASS";
 function isRun(play) { return String(play.type || "").toUpperCase() === "RUN"; }
 
 function scoreSituation(play, situation = {}) {
-  const down = Number(situation.down || 0);
-  const distance = Number(situation.distance || 0);
-  const yardLine = Number.isFinite(Number(situation.yardLine)) ? Number(situation.yardLine) : null;
-  const quarter = Number(situation.quarter || 0);
-  const clock = Number.isFinite(Number(situation.clockSeconds)) ? Number(situation.clockSeconds) : null;
-  const scoreDiff = situation.scoreDifferential == null
+  const normalized = normalizeSituation(situation);
+  const down = Number(normalized.down || 0);
+  const distance = Number(normalized.yardsToGo || 0);
+  const yardLine = Number.isFinite(Number(normalized.yardLine)) ? Number(normalized.yardLine) : null;
+  const yardsToGoal = normalized.yardsToGoal;
+  const quarter = Number(normalized.quarter || 0);
+  const clock = Number.isFinite(Number(normalized.clockSeconds)) ? Number(normalized.clockSeconds) : null;
+  const scoreDiff = normalized.scoreDifferential == null
     ? null
-    : (Number.isFinite(Number(situation.scoreDifferential)) ? Number(situation.scoreDifferential) : null);
-  const flags = situation.flags || {};
+    : (Number.isFinite(Number(normalized.scoreDifferential)) ? Number(normalized.scoreDifferential) : null);
+  const flags = normalized.flags || {};
 
   let score = 0;
   const reasons = [];
