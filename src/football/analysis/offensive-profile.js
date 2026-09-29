@@ -112,7 +112,7 @@ function buildOffensiveProfile(play = {}, authoritativeStructure = null) {
   if (classification?.rpo || /\brpo\b|\boption\b/.test(raw)) decisionClass = 'hybrid';
   else if (classification?.run || String(play.type || '').toUpperCase() === 'RUN') decisionClass = 'run';
 
-  let playMechanism = 'dropback';
+  let playMechanism = decisionClass === 'pass' ? 'dropback' : null;
   if (classification?.rpo || /\brpo\b/.test(raw)) playMechanism = 'rpo';
   else if (/\boption\b|\bread option\b/.test(raw)) playMechanism = 'option';
   else if (/\bdesigned qb run\b|\bqb (draw|power|counter)\b/.test(raw)) playMechanism = 'designed_qb_run';
@@ -120,16 +120,34 @@ function buildOffensiveProfile(play = {}, authoritativeStructure = null) {
   else if (classification?.playAction || /\bplay action\b|\bpa\b/.test(raw)) playMechanism = 'play_action';
 
   const runConcept = conceptFromText(raw, RUN_CONCEPTS);
-  const passConcept = conceptFromText(raw, PASS_CONCEPTS);
-  const routes = unique((authority?.routeTargets || [])
+  let passConcept = conceptFromText(raw, PASS_CONCEPTS);
+  const authoritativeRouteFamilies = (authority?.routeTargets || [])
     .map(row => canonicalRoute(row.routeFamily || row.routeType || row.assignmentName))
-    .filter(Boolean));
+    .filter(Boolean);
+  const routes = unique(authoritativeRouteFamilies);
   if (!routes.length) {
     for (const value of [play.primaryConcept, ...(play.concepts || []), play.name]) {
       const route = canonicalRoute(value);
       if (route) routes.push(route);
     }
   }
+
+  if (!passConcept && authoritativeRouteFamilies.length) {
+    const count = key => authoritativeRouteFamilies.filter(route => route === key).length;
+    const verticals = authoritativeRouteFamilies.filter(route => ['go','wheel','post'].includes(route)).length;
+    if (verticals >= 4) passConcept = 'four_verticals';
+    else if (count('shallow_cross') >= 2) passConcept = 'mesh';
+    else if (count('corner') >= 1 && (count('flat') + count('quick_out')) >= 1) passConcept = 'flood_sail';
+    else if (count('corner') >= 1 && count('hitch_curl') >= 1) passConcept = 'smash';
+    else if (count('in_dig') >= 1 && count('shallow_cross') >= 1) passConcept = 'levels';
+  }
+
+  const assignmentGapEvidence = (authority?.blockingPlayers || [])
+    .some(player => (player.eaAssignment?.semantics?.blocking?.leadBlocks || []).length > 0);
+  const inferredRunFamily = inferRunFamily(runConcept);
+  const runFamily = inferredRunFamily !== 'unknown'
+    ? inferredRunFamily
+    : (decisionClass === 'run' && assignmentGapEvidence ? 'gap' : 'unknown');
 
   const modifiers = [];
   if (authority?.motionPlayers?.length || /\bmotion\b/.test(raw)) modifiers.push('motion');
@@ -142,7 +160,7 @@ function buildOffensiveProfile(play = {}, authoritativeStructure = null) {
   return {
     decisionClass,
     playMechanism,
-    runFamily: inferRunFamily(runConcept),
+    runFamily,
     runConcept: runConcept || null,
     passConcept: passConcept || null,
     routes: unique(routes),
@@ -156,6 +174,7 @@ function buildOffensiveProfile(play = {}, authoritativeStructure = null) {
       decisionClass: authoritative ? PROVENANCE.EA_AUTHORED : PROVENANCE.DERIVED,
       playMechanism: authoritative ? PROVENANCE.EA_AUTHORED : PROVENANCE.DERIVED,
       runConcept: authoritative && runConcept ? PROVENANCE.DERIVED : (runConcept ? PROVENANCE.HEURISTIC : null),
+      runFamily: assignmentGapEvidence && !runConcept ? PROVENANCE.DERIVED : (runConcept ? (authoritative ? PROVENANCE.DERIVED : PROVENANCE.HEURISTIC) : null),
       passConcept: authoritative && passConcept ? PROVENANCE.DERIVED : (passConcept ? PROVENANCE.HEURISTIC : null),
       routes: authority?.routeTargets?.length ? PROVENANCE.EA_AUTHORED : (routes.length ? PROVENANCE.HEURISTIC : null),
       fieldStress: routes.length ? PROVENANCE.DERIVED : null,
