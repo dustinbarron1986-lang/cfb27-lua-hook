@@ -302,6 +302,7 @@ function advisePreSnapCoordinator({
   authoritativeKnowledge,
   knowledge,
   performanceStore,
+  empiricalPrior = null,
 } = {}) {
   if (!selectedPlay || !defensiveCall?.name) {
     return { available: false, reason: 'Selected play and exact defensive call are required.' };
@@ -324,18 +325,29 @@ function advisePreSnapCoordinator({
   const protectors = eligibleProtectors(authoritativeKnowledge);
   const offensiveAuthority = authoritativeKnowledge?.authoritative || null;
   const flip = flipRecommendation(selectedPlay, situation || {}, offensiveAuthority);
+  const offensiveProfile = buildOffensiveProfile(selectedPlay, offensiveAuthority);
   const assignmentMatchup = evaluateAssignmentMatchup({
     offensiveAuthority,
-    offensiveProfile: buildOffensiveProfile(selectedPlay, offensiveAuthority),
+    offensiveProfile,
     defensiveAuthority: defensiveCall?.authoritativeDefense || null,
   });
+  const empiricalCoverage = empiricalPrior?.routeCoverageEvidence
+    ? empiricalPrior.routeCoverageEvidence(offensiveProfile, defensiveCall || {})
+    : { available:false, score:0 };
   baseGrade.assignmentMatchup = assignmentMatchup;
+  baseGrade.empiricalCoveragePrior = empiricalCoverage;
   const pressure = Boolean(defense.pressure);
   const quickAnswer = (baseStructure.threatKeys || []).some(key =>
     ['quick_horizontal', 'screen', 'perimeter_access', 'crossing'].includes(key)
   );
 
-  const structurallyPlayable = baseGrade.valid && assignmentMatchup.classification !== 'RED';
+  const empiricalRedFlag = !assignmentMatchup.available &&
+    empiricalCoverage.available &&
+    Number(empiricalCoverage.score) <= -0.65 &&
+    Number(baseGrade.fit || 0) < 0.40;
+  const structurallyPlayable = baseGrade.valid &&
+    assignmentMatchup.classification !== 'RED' &&
+    !empiricalRedFlag;
 
   if (structurallyPlayable && flip.recommend && !pressure) {
     return makeResult({
@@ -367,7 +379,11 @@ function advisePreSnapCoordinator({
       audiblePackage,
       authoritativeKnowledge,
       reasons: [
-        ...(assignmentMatchup.available ? assignmentMatchup.reasons : []),
+        ...(assignmentMatchup.available
+          ? assignmentMatchup.reasons
+          : (empiricalCoverage.available
+            ? ['Empirical route/coverage evidence is secondary because individual defensive assignments are unresolved.']
+            : [])),
         pressure
           ? 'Current play already carries a structurally credible quick pressure answer; no larger adjustment is justified.'
           : 'Current play remains a structurally valid answer to the revealed defense.',
