@@ -1,4 +1,5 @@
-const { strategicPlayScore } = require("../gameplan/strategic-context");\nconst { normalizeSituation } = require("../analysis/situation-normalizer");
+const { strategicPlayScore } = require("../gameplan/strategic-context");
+const { normalizeSituation } = require("../analysis/situation-normalizer");
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
