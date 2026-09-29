@@ -62,6 +62,7 @@ class FootballEngine {
 
     this.executionAdvisor = new ExecutionAdvisor({
       knowledgeEngine: this.knowledge,
+      empiricalPrior: this.empiricalPrior,
       ...(options.executionAdvisor || {})
     });
 
