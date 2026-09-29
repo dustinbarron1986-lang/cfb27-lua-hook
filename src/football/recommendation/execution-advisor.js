@@ -111,6 +111,7 @@ class ExecutionAdvisor {
       ? options.playKnowledgeStore
       : safeCreatePlayKnowledgeStore(options.playKnowledgeOptions);
     this.eaPlayKnowledge = options.eaPlayKnowledgeStore || null;
+    this.empiricalPrior = options.empiricalPrior || null;
   }
 
   _resolvePlayKnowledge(selectedPlay) {
@@ -254,6 +255,7 @@ class ExecutionAdvisor {
           authoritativeKnowledge: authoritative,
           knowledge: this.knowledge,
           performanceStore,
+          empiricalPrior: this.empiricalPrior,
         })
       : null;
 
