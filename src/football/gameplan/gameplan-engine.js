@@ -903,11 +903,12 @@ class GameplanEngine {
       };
     }
     const entry = this.active.sheet.entries.find(row => String(row.playId) === playKey(play)) || null;
-    if (!entry) {
-      return { score: 0, components: {}, reasons: [], planReasons: [], entry: null };
-    }
 
+    // The legacy call sheet is retained for UI/review compatibility only.
+    // Every play in the selected playbook receives a dynamic gameplan fit;
+    // membership in the old fixed-size sheet is not an eligibility gate or bonus.
     const desc = describePlay(play);
+    const dynamicFit = gameplanFit(desc, this.active.gameplan);
     const setup = this.setup.score(play, entry);
     const aggression = aggressionModifier(desc, this.active.gameplan, this.active.aggressiveness, situation);
     const audibleFlexibility = audiblePackageValue(this.audiblePackageStore, this.active.playbookId, play.formation);
@@ -947,8 +948,8 @@ class GameplanEngine {
       }
     }
     const components = {
-      gameplanFit: clamp(Number(entry.gameplanScore || 0) * 0.34, -0.5, 2.1),
-      callSheetMembership: 0.18,
+      gameplanFit: clamp(Number(dynamicFit.score || 0) * 0.34, -0.5, 2.1),
+      callSheetMembership: 0,
       gameplanMixAccountability: identityCorrection,
       strategicSituation: strategic.score,
       sequencingValue: setup.components.sequencingValue,
@@ -968,7 +969,7 @@ class GameplanEngine {
         ...aggression.reasons,
         ...(audibleFlexibility >= 0.18 ? ['confirmed formation audible package adds modest tactical flexibility.'] : []),
       ],
-      planReasons: entry.planReasons || [],
+      planReasons: entry?.planReasons?.length ? entry.planReasons : dynamicFit.reasons,
       entry,
       identity: {
         type: String(play.type || play.playKind || '').toUpperCase() || desc.typeFamily.toUpperCase(),
