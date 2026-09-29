@@ -336,8 +336,58 @@ function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
   return top;
 }
 
-function printOracleRecommendation(engine, playbooks, state, exactDefense, io, coordinatorWindow) {
+function printOracleRecommendation(engine, playbooks, state, exactDefense, io, coordinatorWindow, authoritativeOffense = null) {
   if (!exactDefense || !isOffensiveScrimmageSituation(state)) return null;
+
+  // Production Oracle shares the ExecutionAdvisor pre-snap lifecycle. The
+  // legacy reranker below is retained only for isolated test doubles that do
+  // not expose adviseExecution().
+  if (typeof engine.adviseExecution === 'function') {
+    const offenseCall = callFromState(state, 'offense');
+    if (!offenseCall.available || !offenseCall.name) return null;
+    const selectedPlay = findPlay(playbooks.offense, { id: offenseCall.id, name: offenseCall.name, set: offenseCall.set });
+    if (!selectedPlay) return null;
+    const executionPlay = attachAuthoritativeIdentity(selectedPlay, authoritativeOffense);
+    const advice = engine.adviseExecution({
+      selectedPlay: executionPlay,
+      defensiveCall: exactDefense,
+      playbook: playbooks.offense,
+      situation: situationFromState(state),
+    });
+    const pre = advice?.preSnap || null;
+    const type = pre?.action?.type || 'STAY';
+    const decision = type === 'AUDIBLE' ? 'CHANGE' : (type === 'STAY' ? 'KEEP' : 'ADJUST');
+    const replacementPlay = pre?.action?.play
+      ? (findPlay(playbooks.offense, pre.action.play) || pre.action.play)
+      : null;
+    const oracle = {
+      decision,
+      play: executionPlay,
+      replacement: replacementPlay,
+      adjustment: decision === 'ADJUST' ? pre?.action || null : null,
+      scoreDelta: null,
+      reason: pre?.reason || advice?.reason || 'No supported pre-snap change is justified.',
+      preSnap: pre,
+    };
+    coordinatorWindow.showOracleRecommendation({
+      decision,
+      initialPlay: executionPlay,
+      play: replacementPlay || executionPlay,
+      defense: exactDefense,
+      reason: oracle.reason,
+      adjustment: oracle.adjustment,
+    }, state);
+    io.log(`[OC] CPU DEFENSE: ${exactDefense.formation || '?'} / ${exactDefense.name} (${exactDefense.coverageFamily || 'unresolved'})`);
+    if (decision === 'CHANGE') {
+      io.log(`[OC] ORACLE: AUDIBLE TO ${replacementPlay?.formation || '?'} / ${replacementPlay?.name || replacementPlay?.id || '?'}`);
+    } else if (decision === 'ADJUST') {
+      io.log(`[OC] ORACLE: ${pre?.action?.label || type}`);
+    } else {
+      io.log(`[OC] ORACLE: KEEP ${executionPlay.formation || '?'} / ${executionPlay.name || executionPlay.id}`);
+    }
+    io.log(`[OC] ORACLE WHY: ${oracle.reason}`);
+    return oracle;
+  }
 
   // Oracle is post-selection adaptation: reason from the user's current live
   // call, never from the coordinator's earlier Stage-1 recommendation.
@@ -558,7 +608,7 @@ function logAuthorityTransition(authority, liveCall, previousKey, io) {
   return nextKey;
 }
 
-function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coordinatorWindow, authoritativeOffense = null) {
+function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coordinatorWindow, authoritativeOffense = null, exactDefense = null) {
   if (state.possession !== 0) return seenKey;
   if (!fresh.offense || !fresh.defense) return seenKey;
   const offenseCall = callFromState(state, 'offense');
@@ -594,7 +644,7 @@ function printExecutionAdvice(engine, playbooks, state, seenKey, fresh, io, coor
 
   const result = engine.adviseExecution({
     selectedPlay: executionPlay,
-    defensiveCall: { id: defenseCall.id, set: defenseCall.set, name: defenseCall.name },
+    defensiveCall: exactDefense || { id: defenseCall.id, set: defenseCall.set, name: defenseCall.name },
     playbook: playbooks.offense,
     situation: situationFromState(state),
   });
@@ -1144,7 +1194,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
             exactDefense.id || exactDefense.name,
           ].join('|');
           if (oracleRecommendationKey !== lastOracleRecommendationKey) {
-            printOracleRecommendation(engine, playbooks, current, exactDefense, io, coordinatorWindow);
+            printOracleRecommendation(engine, playbooks, current, exactDefense, io, coordinatorWindow, authoritativeOffense);
             lastOracleRecommendationKey = oracleRecommendationKey;
           }
         }
@@ -1157,7 +1207,8 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
           fresh,
           io,
           coordinatorWindow,
-          authoritativeOffense
+          authoritativeOffense,
+          exactDefense
         );
         lastExecutionKey = printDefensiveRecommendation(
           engine,
