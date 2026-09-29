@@ -120,9 +120,10 @@ class PerformanceStore {
     const distanceBucket = value => {
       const d = Number(value);
       if (!Number.isFinite(d)) return "unknown";
-      if (d <= 2) return "short";
+      if (d >= 1 && d <= 3) return "short";
       if (d <= 6) return "medium";
-      return "long";
+      if (d <= 10) return "long";
+      return "extra_long";
     };
 
     const fieldBucket = value => {

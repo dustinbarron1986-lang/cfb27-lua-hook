@@ -1,4 +1,4 @@
-const { strategicPlayScore } = require("../gameplan/strategic-context");
+const { strategicPlayScore } = require("../gameplan/strategic-context");\nconst { normalizeSituation } = require("../analysis/situation-normalizer");
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
@@ -25,35 +25,17 @@ function scoreSituation(play, situation = {}) {
   let score = 0;
   const reasons = [];
 
-  // Down/distance: not a coverage matchup; simply whether the call fits the job.
+  // Mandatory conversion logic stays here; generic run/pass effectiveness lives
+  // in EmpiricalPrior instead of hand-authored situation beliefs.
   if ((down === 3 || down === 4) && distance > 0) {
-    if (distance <= 2) {
-      if (isRun(play) || hasConcept(play, "quick_game", "qb_sneak", "duo", "interior_run")) {
-        score += 2.0; reasons.push("fits short-yardage conversion");
-      }
-      if (hasConcept(play, "vertical", "deep_shot")) {
-        score -= 1.5; reasons.push("lower conversion fit on short-yardage money down");
-      }
-    } else if (distance >= 7) {
-      if (isPass(play) && hasConcept(play, "mesh", "crossers", "levels", "flood", "stick", "quick_intermediate")) {
-        score += 2.2; reasons.push("concept can reach long-yardage sticks");
-      } else if (isRun(play) && !hasConcept(play, "draw", "screen")) {
-        score -= 1.6; reasons.push("ordinary run has weak long-yardage conversion fit");
-      }
+    if (distance <= 3 && hasConcept(play, "vertical", "deep_shot", "slow_developing")) {
+      score -= 0.9; reasons.push("slow/deep design carries extra conversion risk in short yardage");
     }
-  }
-
-  if (down === 1 && distance >= 9) {
-    if (isRun(play)) { score += 0.5; reasons.push("keeps early-down run constraint credible"); }
-    if (hasConcept(play, "play_action")) { score += 0.6; reasons.push("play-action has early-down sequencing value"); }
-  }
-
-  // 2nd-and-short is a classic opportunity to spend some risk on an explosive attempt.
-  if (down === 2 && distance > 0 && distance <= 3) {
-    if (hasConcept(play, "deep_shot", "vertical", "play_action", "shot")) {
-      score += 2.4; reasons.push("2nd-and-short creates a favorable shot opportunity");
-    } else if (isRun(play)) {
-      score += 0.8; reasons.push("high-probability conversion keeps the offense on schedule");
+    if (distance >= 7) {
+      const canReachSticks = hasConcept(play, "mesh", "crossers", "levels", "flood", "stick", "quick_intermediate", "draw", "screen");
+      if (isRun(play) && !canReachSticks) {
+        score -= 1.25; reasons.push("ordinary run lacks credible line-to-gain structure on a mandatory long conversion");
+      }
     }
   }
 
@@ -68,7 +50,7 @@ function scoreSituation(play, situation = {}) {
       }
     }
 
-    if (yardLine >= 80) {
+    if (yardsToGoal != null && yardsToGoal <= 20) {
       if (hasConcept(play, "vertical", "deep_shot")) {
         score -= 0.7; reasons.push("compressed red-zone space reduces pure vertical value");
       }

@@ -1,0 +1,363 @@
+{
+  "schemaVersion": 1,
+  "metadata": {
+    "id": "cfb-national-observational-2025-bootstrap-v1",
+    "season": 2025,
+    "population": "national college-football observational play-by-play",
+    "scopeNote": "Provider/population scope is insufficiently verified to assert FBS-only.",
+    "causalInterpretation": false,
+    "role": "generic prior",
+    "usage": "bounded bootstrap use only; local CFB27 evidence should gain weight with sample size",
+    "runtimeNetworkRequired": false
+  },
+  "situation": [
+    {
+      "id": "1st_10",
+      "down": 1,
+      "min": 10,
+      "max": 10,
+      "n": 86749,
+      "pass": {
+        "usage": 0.43,
+        "success": 0.47,
+        "epa": 0.05
+      },
+      "run": {
+        "usage": 0.57,
+        "success": 0.4,
+        "epa": -0.06
+      }
+    },
+    {
+      "id": "1st_extra_long",
+      "down": 1,
+      "min": 11,
+      "max": null,
+      "n": 3364,
+      "pass": {
+        "usage": 0.49,
+        "success": 0.3,
+        "epa": -0.02
+      },
+      "run": {
+        "usage": 0.51,
+        "success": 0.21,
+        "epa": -0.07
+      }
+    },
+    {
+      "id": "2nd_short",
+      "down": 2,
+      "min": 1,
+      "max": 3,
+      "n": 10449,
+      "pass": {
+        "usage": 0.32,
+        "success": 0.56,
+        "epa": -0.11
+      },
+      "run": {
+        "usage": 0.68,
+        "success": 0.66,
+        "epa": -0.03
+      }
+    },
+    {
+      "id": "2nd_medium",
+      "down": 2,
+      "min": 4,
+      "max": 6,
+      "n": 16752,
+      "pass": {
+        "usage": 0.42,
+        "success": 0.49,
+        "epa": 0.1
+      },
+      "run": {
+        "usage": 0.58,
+        "success": 0.5,
+        "epa": 0.11
+      }
+    },
+    {
+      "id": "2nd_long",
+      "down": 2,
+      "min": 7,
+      "max": null,
+      "n": 44335,
+      "pass": {
+        "usage": 0.55,
+        "success": 0.36,
+        "epa": 0.04
+      },
+      "run": {
+        "usage": 0.45,
+        "success": 0.28,
+        "epa": -0.07
+      }
+    },
+    {
+      "id": "3rd_short",
+      "down": 3,
+      "min": 1,
+      "max": 3,
+      "n": 11800,
+      "pass": {
+        "usage": 0.3,
+        "success": 0.52,
+        "epa": 0.01
+      },
+      "run": {
+        "usage": 0.7,
+        "success": 0.68,
+        "epa": 0.14
+      }
+    },
+    {
+      "id": "3rd_medium",
+      "down": 3,
+      "min": 4,
+      "max": 6,
+      "n": 11349,
+      "pass": {
+        "usage": 0.71,
+        "success": 0.42,
+        "epa": 0.06
+      },
+      "run": {
+        "usage": 0.29,
+        "success": 0.44,
+        "epa": 0.17
+      }
+    },
+    {
+      "id": "3rd_long",
+      "down": 3,
+      "min": 7,
+      "max": 10,
+      "n": 13346,
+      "pass": {
+        "usage": 0.79,
+        "success": 0.3,
+        "epa": -0.05
+      },
+      "run": {
+        "usage": 0.21,
+        "success": 0.31,
+        "epa": 0.17
+      }
+    },
+    {
+      "id": "3rd_extra_long",
+      "down": 3,
+      "min": 11,
+      "max": null,
+      "n": 8344,
+      "pass": {
+        "usage": 0.75,
+        "success": 0.18,
+        "epa": -0.16
+      },
+      "run": {
+        "usage": 0.25,
+        "success": 0.12,
+        "epa": -0.16
+      }
+    },
+    {
+      "id": "4th_1",
+      "down": 4,
+      "min": 1,
+      "max": 1,
+      "n": 2188,
+      "pass": {
+        "usage": 0.15,
+        "success": 0.59,
+        "epa": 0.58
+      },
+      "run": {
+        "usage": 0.85,
+        "success": 0.72,
+        "epa": 0.94
+      }
+    },
+    {
+      "id": "4th_short",
+      "down": 4,
+      "min": 2,
+      "max": 3,
+      "n": 1779,
+      "pass": {
+        "usage": 0.58,
+        "success": 0.53,
+        "epa": 0.45
+      },
+      "run": {
+        "usage": 0.42,
+        "success": 0.58,
+        "epa": 0.66
+      }
+    },
+    {
+      "id": "4th_medium",
+      "down": 4,
+      "min": 4,
+      "max": 6,
+      "n": 1324,
+      "pass": {
+        "usage": 0.83,
+        "success": 0.39,
+        "epa": -0.12
+      },
+      "run": {
+        "usage": 0.17,
+        "success": 0.49,
+        "epa": 0.68
+      }
+    },
+    {
+      "id": "4th_long",
+      "down": 4,
+      "min": 7,
+      "max": null,
+      "n": 1337,
+      "pass": {
+        "usage": 0.84,
+        "success": 0.27,
+        "epa": -0.32
+      },
+      "run": {
+        "usage": 0.16,
+        "success": 0.33,
+        "epa": 0.1
+      }
+    }
+  ],
+  "routeCoverage": [
+    {
+      "route": "post",
+      "coverage": "cover_2",
+      "n": 214,
+      "epa": 0.82
+    },
+    {
+      "route": "post",
+      "coverage": "cover_4",
+      "n": 109,
+      "epa": 0.722
+    },
+    {
+      "route": "corner",
+      "coverage": "cover_3",
+      "n": 162,
+      "epa": 0.708
+    },
+    {
+      "route": "post",
+      "coverage": "cover_1",
+      "n": 244,
+      "epa": 0.674
+    },
+    {
+      "route": "go",
+      "coverage": "cover_4",
+      "n": 171,
+      "epa": 0.633
+    },
+    {
+      "route": "post",
+      "coverage": "cover_6",
+      "n": 70,
+      "epa": 0.547
+    },
+    {
+      "route": "post",
+      "coverage": "cover_3",
+      "n": 262,
+      "epa": 0.466
+    },
+    {
+      "route": "corner",
+      "coverage": "cover_1",
+      "n": 247,
+      "epa": 0.431
+    },
+    {
+      "route": "corner",
+      "coverage": "cover_2",
+      "n": 140,
+      "epa": 0.141
+    },
+    {
+      "route": "screen",
+      "coverage": "cover_4",
+      "n": 158,
+      "epa": 0.088
+    },
+    {
+      "route": "screen",
+      "coverage": "cover_3",
+      "n": 482,
+      "epa": -0.05
+    },
+    {
+      "route": "swing",
+      "coverage": "cover_2",
+      "n": 281,
+      "epa": -0.131
+    },
+    {
+      "route": "screen",
+      "coverage": "cover_2",
+      "n": 481,
+      "epa": -0.178
+    }
+  ],
+  "routeShell": [
+    {
+      "route": "post",
+      "man": 0.632,
+      "zone": 0.613
+    },
+    {
+      "route": "go",
+      "man": 0.392,
+      "zone": 0.524
+    },
+    {
+      "route": "corner",
+      "man": 0.375,
+      "zone": 0.503
+    },
+    {
+      "route": "in_dig",
+      "man": 0.32,
+      "zone": 0.255
+    },
+    {
+      "route": "deep_out",
+      "man": 0.329,
+      "zone": 0.263
+    },
+    {
+      "route": "slant",
+      "man": 0.282,
+      "zone": 0.208
+    },
+    {
+      "route": "quick_out",
+      "man": 0.133,
+      "zone": 0.033
+    },
+    {
+      "route": "shallow_cross",
+      "man": 0.064,
+      "zone": 0.065
+    },
+    {
+      "route": "hitch_curl",
+      "man": -0.014,
+      "zone": 0.18
+    }
+  ]
+}\n
