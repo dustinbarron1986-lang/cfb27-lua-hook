@@ -4,6 +4,8 @@ const { classifyOffensiveStructure, classifyDefensiveStructure, normalize } = re
 const { evaluateOffensiveCandidate, desiredOffensiveThreats } = require('./counter-model');
 const { adjustmentCapabilities } = require('./play-adjustment-capabilities');
 const { flipRecommendation } = require('../analysis/hash-geometry');
+const { buildOffensiveProfile } = require('../analysis/offensive-profile');
+const { evaluateAssignmentMatchup } = require('../analysis/assignment-matchup');
 
 const ACTION = Object.freeze({
   STAY: 'STAY',
@@ -320,13 +322,22 @@ function advisePreSnapCoordinator({
   });
   const routes = authoritativeRoutes(authoritativeKnowledge);
   const protectors = eligibleProtectors(authoritativeKnowledge);
-  const flip = flipRecommendation(selectedPlay, situation || {}, authoritativeKnowledge?.authoritative || null);
+  const offensiveAuthority = authoritativeKnowledge?.authoritative || null;
+  const flip = flipRecommendation(selectedPlay, situation || {}, offensiveAuthority);
+  const assignmentMatchup = evaluateAssignmentMatchup({
+    offensiveAuthority,
+    offensiveProfile: buildOffensiveProfile(selectedPlay, offensiveAuthority),
+    defensiveAuthority: defensiveCall?.authoritativeDefense || null,
+  });
+  baseGrade.assignmentMatchup = assignmentMatchup;
   const pressure = Boolean(defense.pressure);
   const quickAnswer = (baseStructure.threatKeys || []).some(key =>
     ['quick_horizontal', 'screen', 'perimeter_access', 'crossing'].includes(key)
   );
 
-  if (baseGrade.valid && flip.recommend && !pressure) {
+  const structurallyPlayable = baseGrade.valid && assignmentMatchup.classification !== 'RED';
+
+  if (structurallyPlayable && flip.recommend && !pressure) {
     return makeResult({
       action: { type: ACTION.FLIP, label: 'FLIP PLAY — ' + flip.targetSide + ' / FIELD SIDE', targetSide: flip.targetSide },
       baseGrade,
@@ -344,7 +355,7 @@ function advisePreSnapCoordinator({
     });
   }
 
-  if (baseGrade.valid && (
+  if (structurallyPlayable && (
     (!pressure && baseGrade.fit >= 0.42) ||
     (pressure && quickAnswer && baseGrade.fit >= 0.18)
   )) {
@@ -355,9 +366,12 @@ function advisePreSnapCoordinator({
       defenseProfile,
       audiblePackage,
       authoritativeKnowledge,
-      reasons: [pressure
-        ? 'Current play already carries a structurally credible quick pressure answer; no larger adjustment is justified.'
-        : 'Current play remains a structurally valid answer to the revealed defense.'],
+      reasons: [
+        ...(assignmentMatchup.available ? assignmentMatchup.reasons : []),
+        pressure
+          ? 'Current play already carries a structurally credible quick pressure answer; no larger adjustment is justified.'
+          : 'Current play remains a structurally valid answer to the revealed defense.',
+      ],
       confidence: defense.provenance === 'DERIVED_STRUCTURAL' ? 'HIGH' : 'MEDIUM',
       source: 'COUNTER_MODEL',
       capabilities,
