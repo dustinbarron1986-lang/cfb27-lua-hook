@@ -192,7 +192,7 @@ function resolveAudibleCandidates({ audiblePackage, playbook, formation }) {
   return rows;
 }
 
-function rankAudibles({ audiblePackage, playbook, formation, defenseProfile, knowledge, situation, performanceStore, defensiveCall }) {
+function rankAudibles({ audiblePackage, playbook, formation, defenseProfile, knowledge, situation, performanceStore, defensiveCall, selectedPlay = null }) {
   return resolveAudibleCandidates({ audiblePackage, playbook, formation })
     .map(row => {
       const structure = row.play.structural || classifyOffensiveStructure(row.play, row.play.authoritativeStructure || null);
@@ -205,13 +205,27 @@ function rankAudibles({ audiblePackage, playbook, formation, defenseProfile, kno
         performanceStore,
         defensiveCall,
       });
-      return { ...row, structure, grade };
+      const currentStructure = selectedPlay
+        ? (selectedPlay.structural || classifyOffensiveStructure(selectedPlay, selectedPlay.authoritativeStructure || null))
+        : null;
+      const currentThreats = new Set(currentStructure?.threatKeys || []);
+      const sharedThreats = (structure.threatKeys || []).filter(key => currentThreats.has(key));
+      const intentPreservation = selectedPlay ? {
+        sameFormation: sameFormation(row.play.formation, selectedPlay.formation),
+        sharedThreats,
+        score: Math.min(0.35, sharedThreats.length * 0.12),
+        provenance: 'DERIVED',
+      } : { sameFormation: true, sharedThreats: [], score: 0, provenance: 'DERIVED' };
+      return { ...row, structure, grade, intentPreservation };
     })
     .filter(row => row.grade.valid)
     .sort((a, b) => {
       const structuralGap = Number(b.grade.structuralScore) - Number(a.grade.structuralScore);
       if (Math.abs(structuralGap) >= 0.5) return structuralGap;
       if (b.grade.total !== a.grade.total) return b.grade.total - a.grade.total;
+      if (b.intentPreservation.score !== a.intentPreservation.score) {
+        return b.intentPreservation.score - a.intentPreservation.score;
+      }
       return String(a.slot.slot).localeCompare(String(b.slot.slot));
     });
 }
@@ -290,6 +304,7 @@ function makeResult({ action, baseGrade, finalGrade, defenseProfile, audiblePack
     } : null,
     bestBet,
     callouts: bestBet ? [bestBet] : [],
+    matchupClassification: baseGrade?.matchupClassification || 'YELLOW',
   };
 }
 
@@ -320,6 +335,7 @@ function advisePreSnapCoordinator({
     situation,
     performanceStore,
     defensiveCall,
+    selectedPlay,
   });
   const routes = authoritativeRoutes(authoritativeKnowledge);
   const protectors = eligibleProtectors(authoritativeKnowledge);
@@ -345,9 +361,14 @@ function advisePreSnapCoordinator({
     empiricalCoverage.available &&
     Number(empiricalCoverage.score) <= -0.65 &&
     Number(baseGrade.fit || 0) < 0.40;
-  const structurallyPlayable = baseGrade.valid &&
-    assignmentMatchup.classification !== 'RED' &&
-    !empiricalRedFlag;
+  const matchupClassification =
+    (!baseGrade.valid || assignmentMatchup.classification === 'RED' || empiricalRedFlag)
+      ? 'RED'
+      : (assignmentMatchup.classification === 'GREEN' || Number(baseGrade.fit || 0) >= 0.60)
+        ? 'GREEN'
+        : 'YELLOW';
+  baseGrade.matchupClassification = matchupClassification;
+  const structurallyPlayable = matchupClassification !== 'RED';
 
   if (structurallyPlayable && flip.recommend && !pressure) {
     return makeResult({
@@ -368,7 +389,7 @@ function advisePreSnapCoordinator({
   }
 
   if (structurallyPlayable && (
-    (!pressure && baseGrade.fit >= 0.42) ||
+    !pressure ||
     (pressure && quickAnswer && baseGrade.fit >= 0.18)
   )) {
     return makeResult({
@@ -521,8 +542,7 @@ function advisePreSnapCoordinator({
   });
   const bestAudible = audibleRows[0] || null;
   if (bestAudible && (
-    !baseGrade.valid ||
-    bestAudible.grade.structuralScore >= baseGrade.structuralScore + 0.55 ||
+    matchupClassification === 'RED' ||
     (pressure && !quickAnswer && !protector && !hot)
   )) {
     return makeResult({
@@ -544,7 +564,7 @@ function advisePreSnapCoordinator({
       authoritativeKnowledge: null,
       reasons: [
         'The current play cannot be repaired by a smaller supported adjustment with enough confidence.',
-        'This is the best structurally valid option among the four audibles assigned to the current formation; history only ranks candidates after structural validity.',
+        'This is the best structurally valid option among the four confirmed audibles assigned to the current formation; local history and intent preservation only rank candidates after structural validity.',
       ],
       confidence: 'MEDIUM',
       source: 'FORMATION_AUDIBLE_PACKAGE+COUNTER_MODEL',
