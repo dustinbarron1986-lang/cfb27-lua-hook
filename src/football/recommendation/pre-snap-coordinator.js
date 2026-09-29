@@ -539,6 +539,7 @@ function advisePreSnapCoordinator({
     situation,
     performanceStore,
     defensiveCall,
+    selectedPlay,
   });
   const bestAudible = audibleRows[0] || null;
   if (bestAudible && (
