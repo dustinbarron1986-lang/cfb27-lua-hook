@@ -356,3 +356,44 @@ test('postgame review does not replace on an insufficient sample and preserves r
   const replacement = reviewed.find(row => row.currentAudible === current.name && row.status === 'REPLACE');
   if (replacement) assert.equal(replacement.audibleRole, targetSlot.role);
 });
+
+
+test('YELLOW current call is normally kept instead of audible-chasing a modest score edge', () => {
+  const book = playbook();
+  const selected = book.plays.find(x => x.id === 'a3');
+  const store = new AudiblePackageStore();
+  const planned = store.ensurePackage(book, 'Gun Ace');
+  const pkg = store.confirmPackage({ playbook: book, formation: 'Gun Ace', playIds: planned.slots.map(slot => slot.playId) });
+  const result = advisePreSnapCoordinator({
+    selectedPlay: selected,
+    defensiveCall: defense('Cover 3 Sky', 'Nickel 3-3', 'cover_3'),
+    playbook: book,
+    situation: { down: 2, distance: 5 },
+    audiblePackage: pkg,
+    authoritativeKnowledge: authoritative({ withBack: false, routes: ['corner', 'flat'] }),
+  });
+  assert.ok(['STAY', 'FLIP'].includes(result.decision));
+  assert.notEqual(result.decision, ACTION.AUDIBLE);
+  assert.ok(['GREEN', 'YELLOW'].includes(result.matchupClassification));
+});
+
+test('RED matchup may audible but only to a confirmed same-formation slot', () => {
+  const book = playbook();
+  const store = new AudiblePackageStore();
+  const planned = store.ensurePackage(book, 'Gun Ace');
+  const pkg = store.confirmPackage({ playbook: book, formation: 'Gun Ace', playIds: planned.slots.map(slot => slot.playId) });
+  const selected = { ...book.plays.find(x => x.id === 'a1'), concepts: [] };
+  const result = advisePreSnapCoordinator({
+    selectedPlay: selected,
+    defensiveCall: defense('Cover 3 Sky', 'Nickel 3-3', 'cover_3'),
+    playbook: book,
+    situation: { down: 3, distance: 12 },
+    audiblePackage: pkg,
+    authoritativeKnowledge: authoritative({ withBack: false, routes: [] }),
+  });
+  if (result.decision === ACTION.AUDIBLE) {
+    assert.equal(result.matchupClassification, 'RED');
+    assert.equal(result.action.play.formation, 'Gun Ace');
+    assert.ok(pkg.slots.some(slot => slot.playId === String(result.action.play.id)));
+  }
+});
