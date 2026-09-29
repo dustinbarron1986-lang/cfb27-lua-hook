@@ -187,8 +187,22 @@ class PlaySelectionEngine {
         : { score:0, reason:null, scout:null };
       const tendencyPart = this.tendencies.scoreCandidate(play, tendency);
       const performancePart = performanceScore(this.store, play, situation);
+      const localSituationAttempts = Number(performancePart.situationSummary?.attempts || 0);
+      const localWeight = localSituationAttempts / (localSituationAttempts + 8);
+      const genericWeight = 1 - localWeight;
+      const empiricalSituationScore = empiricalSituation.available ? empiricalSituation.score * genericWeight : 0;
+      const learningBlend = {
+        localAttempts: localSituationAttempts,
+        localWeight: Number(localWeight.toFixed(3)),
+        genericPriorWeight: Number(genericWeight.toFixed(3)),
+        genericPriorRaw: empiricalSituation.score || 0,
+        genericPriorApplied: Number(empiricalSituationScore.toFixed(3)),
+        localEvidence: performancePart.situationSummary,
+        note: 'Local CFB27 outcomes gain influence smoothly; no local EPA is fabricated.',
+      };
       const setupPart = setupScore(this.sequences, this.store, play);
-      const executionRepetition = recentRepetitionPenalty(events, play);
+      // No generic variety penalty: repetition is valid until self-scout/structure supplies a football reason to change.
+      const executionRepetition = 0;
       const riskPenalty = situationPart.risk > 0 ? -0.25 * situationPart.risk : 0;
       const counter = evaluateOffensiveCandidate({
         defenseProfile,
@@ -228,7 +242,7 @@ class PlaySelectionEngine {
         executionRepetition,
         recommendationRepetition: recommendationPenalty.score,
         risk: riskPenalty,
-        empiricalSituationPrior: empiricalSituation.available ? empiricalSituation.score : 0,
+        empiricalSituationPrior: empiricalSituationScore,
         driveObjectiveFit: objectivePart.score,
         hashGeometry: hashPart.score,
         selfScoutValue: selfScoutPart.score,
@@ -307,6 +321,7 @@ class PlaySelectionEngine {
           normalizedProfile,
           hashGeometry: hashPart,
           empiricalSituation,
+          learningBlend,
           empiricalCoverage,
           totalComponents: components
         },
