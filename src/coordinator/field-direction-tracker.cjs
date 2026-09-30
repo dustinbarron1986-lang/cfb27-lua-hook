@@ -148,6 +148,31 @@ class FieldDirectionTracker {
   }
 }
 
+// Hash is part of the huddle identity. A transient verification miss at an
+// unchanged ball spot must not flip hash to "unknown" and manufacture a new
+// situation (a duplicate Stage-1 call), so the last verified hash is kept
+// while possession/down/distance/fieldX are unchanged.
+class HashLatch {
+  constructor() {
+    this.last = null;
+  }
+
+  apply(state = {}) {
+    const spot = [state.possession, state.down, state.distance, state.fieldX].join('|');
+    const hash = String(state.hash || 'unknown').toLowerCase();
+    if (hash !== 'unknown') {
+      this.last = { spot, hash: state.hash, fieldY: state.fieldY ?? null };
+      return state;
+    }
+    if (this.last && this.last.spot === spot) {
+      state.hash = this.last.hash;
+      if (state.fieldY == null) state.fieldY = this.last.fieldY;
+      state.hashSource = 'LATCHED_SAME_SPOT';
+    }
+    return state;
+  }
+}
+
 // Yards to the opponent goal from fieldX (yards from midfield) and a known
 // direction of travel; null when direction is unknown (never mirrored).
 function yardsToGoalFromDirection(fieldX, direction) {
@@ -160,6 +185,7 @@ module.exports = {
   SOURCE,
   FRAME,
   FieldDirectionTracker,
+  HashLatch,
   directionFromTransition,
   verifiedLineToGainDirection,
   yardsToGoalFromDirection,

@@ -23,8 +23,9 @@ const {
 } = require('../football/analysis/authoritative-defense');
 const { EaDefensivePlayStore } = require('../football/knowledge/ea-defensive-play-store');
 const { coverageFamilyFromAuthority } = require('../football/analysis/structural-threat-model');
+const { fieldBoundaryGeometry } = require('../football/analysis/situation-normalizer');
 const { GamePhaseTracker } = require('./game-phase-tracker.cjs');
-const { FieldDirectionTracker, verifiedLineToGainDirection, yardsToGoalFromDirection } = require('./field-direction-tracker.cjs');
+const { FieldDirectionTracker, HashLatch, verifiedLineToGainDirection, yardsToGoalFromDirection } = require('./field-direction-tracker.cjs');
 const { oracleStrategicDecision } = require('../football/gameplan/strategic-context');
 const {
   resolveFreshOffensiveAuthority,
@@ -375,7 +376,10 @@ function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
   if (empirical?.available) io.log(`[OC] SITUATION PRIOR: ${empirical.rowId || '?'} | ${String(empirical.mode || '?').toUpperCase()} ${Number(empirical.score || 0) >= 0 ? '+' : ''}${Number(empirical.score || 0).toFixed(3)}`);
   const hist = top.diagnostic?.historicalDefense;
   if (hist?.sampleSize) io.log(`[OC] HIST DEF: n=${hist.sampleSize} confidence=${hist.confidence} raw=${hist.rawStructuralScore} weight=${hist.appliedConfidenceWeight} applied=${hist.appliedContribution}`);
-  if (situation.hash && situation.hash !== 'UNKNOWN') io.log(`[OC] HASH: ${situation.hash} | field=${situation.fieldSide || '?'} boundary=${situation.boundarySide || '?'}`);
+  const geometry = fieldBoundaryGeometry(situation);
+  if (geometry.hash !== 'UNKNOWN') {
+    io.log(`[OC] HASH: ${geometry.hash} | field=${geometry.fieldSide || '?'} boundary=${geometry.boundarySide || '?'} | direction=${situation.offenseDirection ?? '?'} (${situation.offenseDirectionSource || 'UNKNOWN'}) | yardsToGoal=${situation.yardsToGoal ?? '?'}`);
+  }
   io.log(`[OC] CALL: ${top.play.formation || '?'} / ${top.play.name || top.play.id}  score=${top.score}`);
   if (ranked.gameplan?.gameplanName) {
     io.log(`[OC] GAMEPLAN: ${ranked.gameplan.gameplanName} | fullPlaybook=${ranked.callSheet?.eligible ?? playbooks.offense?.plays?.length ?? 0} | aggression=${ranked.gameplan.aggressiveness} | legacyCallSheet=${ranked.gameplan.callSheetSize} advisory-only`);
@@ -1137,6 +1141,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   const reducer = new SnapReducer();
   const phaseTracker = new GamePhaseTracker();
   const fieldDirection = new FieldDirectionTracker();
+  const hashLatch = new HashLatch();
   let lastFieldDirectionKey = null;
   let lastSituationKey = null;
   let lastExecutionKey = null;
@@ -1226,6 +1231,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
       }
       // Direction of travel is annotated BEFORE the reducer sees the state so
       // completed-snap yards and yards-to-goal use it.
+      hashLatch.apply(state);
       const directionNow = fieldDirection.direction(state);
       state.offenseDirection = directionNow.direction;
       state.offenseDirectionSource = directionNow.source;
