@@ -1220,8 +1220,15 @@ class CoordinatorWindow {
     if (r.turnover) flags.push('CHANGE OF POSSESSION');
     if (typeof r.yards === 'number' && Math.abs(r.yards) >= 20) flags.push('BIG PLAY');
     const prefix = event.play?.name ? event.play.name + ': ' : '';
-    // Result presentation must not invalidate or replace the active huddle.
-    return this._set({ result: prefix + [yards, ...flags].join(' • ') });
+    // Result presentation must not invalidate the situation/recommendation
+    // identity, but stale execution guidance from the completed snap is done.
+    return this._set({
+      result: prefix + [yards, ...flags].join(' • '),
+      read: null,
+      guide: null,
+      audibleRecommendation: null,
+      preSnapRecommendation: null,
+    });
   }
 
   showError(error, state = null) {
