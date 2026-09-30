@@ -356,6 +356,8 @@ function parsePlayXml(xmlText, options = {}) {
     runHole: first(f, ['runHole', 'RunHole']) ?? null,
     flowType: first(f, ['FlowType', 'flowType']) || null,
     allowHotRoutes: first(f, ['allowHotRoutes', 'AllowHotRoutes']) ?? null,
+    canFlip: first(f, ['canFlip', 'CanFlip']) ?? null,
+    defenseFlipRules: first(f, ['defenseFlipRules', 'DefenseFlipRules']) || null,
     enableMotion: first(f, ['enableMotion', 'EnableMotion']) ?? null,
     disableMotion: first(f, ['disableMotion', 'DisableMotion']) ?? null,
     passShort: first(f, ['passShort', 'PassShort']) ?? null,

@@ -84,6 +84,36 @@ function fieldStressFromRoutes(routes) {
   return unique(stress);
 }
 
+// Width-sensitive route families whose END side defines where a pass play
+// attacks laterally.
+const WIDTH_ROUTES = new Set(['flat', 'quick_out', 'deep_out', 'corner', 'wheel', 'swing', 'screen']);
+// EA run holes 1..6 and 8: even = offense right, odd = offense left. Verified
+// against the side named in the authored ball-carrier assets of every joined
+// Pro Style run (even->right 24/25, odd->left 23/27). Hole 0 is the non-run
+// default and hole 7 is inconsistent in the data, so neither is used.
+const RUN_HOLE_SIDE = Object.freeze({ 1: 'LEFT', 2: 'RIGHT', 3: 'LEFT', 4: 'RIGHT', 5: 'LEFT', 6: 'RIGHT', 8: 'RIGHT' });
+
+// Offense-relative lateral orientation derived from EA-authored data; null
+// when the play is balanced or unknown. Shared field frame: -x = offense left.
+function derivedOrientation(play = {}, authority = null, decisionClass = null) {
+  if (decisionClass === 'run' || decisionClass === 'hybrid') {
+    const hole = Number(authority?.play?.runHole ?? play.runHole);
+    if (RUN_HOLE_SIDE[hole]) return { side: RUN_HOLE_SIDE[hole], provenance: 'DERIVED_EA_RUN_HOLE' };
+  }
+  let left = 0;
+  let right = 0;
+  for (const target of authority?.routeTargets || []) {
+    if (!WIDTH_ROUTES.has(canonicalRoute(target.routeFamily || target.routeType || target.assignmentName))) continue;
+    const points = target.geometry?.points || [];
+    const end = Number(points[points.length - 1]?.x);
+    if (!Number.isFinite(end)) continue;
+    if (end < -1) left += 1;
+    else if (end > 1) right += 1;
+  }
+  if (left + right === 0 || Math.abs(left - right) < 1 || (left && right && Math.abs(left - right) < 2)) return null;
+  return { side: left > right ? 'LEFT' : 'RIGHT', provenance: 'DERIVED_EA_ROUTE_GEOMETRY' };
+}
+
 function inferRunFamily(runConcept) {
   if (!runConcept) return 'unknown';
   if (['inside_zone','split_zone','outside_zone'].includes(runConcept)) return 'zone';
@@ -173,7 +203,10 @@ function buildOffensiveProfile(play = {}, authoritativeStructure = null) {
   if (playMechanism === 'option') modifiers.push('option');
 
   const authoritative = Boolean(authority);
+  const orientation = derivedOrientation(play, authority, decisionClass);
   return {
+    orientationSide: orientation?.side || null,
+    orientationProvenance: orientation?.provenance || null,
     decisionClass,
     playMechanism,
     runFamily,
@@ -229,6 +262,7 @@ class OffensiveProfileProvider {
 module.exports = {
   PROVENANCE,
   canonicalRoute,
+  derivedOrientation,
   fieldStressFromRoutes,
   buildOffensiveProfile,
   OffensiveProfileProvider,

@@ -234,6 +234,8 @@ function compileResolvedPlay(play, context) {
       concepts: play.concepts || [],
       flowType: play.flowType || null,
       allowHotRoutes: play.allowHotRoutes ?? null,
+      canFlip: play.canFlip ?? null,
+      defenseFlipRules: play.defenseFlipRules || null,
       enableMotion: play.enableMotion ?? null,
       disableMotion: play.disableMotion ?? null,
       additionalPresnapMovements: play.additionalPresnapMovements || [],

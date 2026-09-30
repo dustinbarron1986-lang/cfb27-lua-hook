@@ -46,3 +46,4 @@ data/knowledge/ea-assignment-index.json
 # Generated locally from authoritative Formation/Set/Play + PositionAssignment exports.
 # Keep raw/export-derived play knowledge off GitHub until size/content policy is reviewed.
 data/knowledge/pro-style-ea-play-knowledge.json
+data/knowledge/ea-defensive-play-knowledge.json

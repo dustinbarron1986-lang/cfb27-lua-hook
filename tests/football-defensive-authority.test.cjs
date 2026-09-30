@@ -23,6 +23,7 @@ const PLAYBOOKS = researchPath('Playbooks');
 const ASSIGNMENTS = researchPath('Assignments');
 const table = loadRouteTypeTable();
 const store = EaDefensivePlayStore.load();
+const SKIP_DEFENSE = store ? false : 'defensive authority artifact not built (node scripts/build-ea-defensive-play-knowledge.cjs <Research/Playbooks>)';
 
 const FIXTURE = `<?xml version="1.0" encoding="utf-8"?>
 <playbook>
@@ -114,18 +115,20 @@ test('defensive responsibilities preserve EA semantics and convert EA side to of
 
 test('checked-in route-type table matches a fresh derivation from the Research corpus', t => {
   if (!PLAYBOOKS || !ASSIGNMENTS || !fs.existsSync(ASSIGNMENTS)) return t.skip('Research corpus not present');
+  const knowledgePath = path.resolve(__dirname, '..', 'data', 'knowledge', 'pro-style-ea-play-knowledge.json');
+  if (!fs.existsSync(knowledgePath)) return t.skip('offensive EA play knowledge not built');
   const { derive } = require('../scripts/research/derive-assign-route-types.cjs');
   const fresh = derive({
     playbooksDir: PLAYBOOKS,
     assignmentsDir: ASSIGNMENTS,
-    knowledgePath: path.resolve(__dirname, '..', 'data', 'knowledge', 'pro-style-ea-play-knowledge.json'),
+    knowledgePath,
   });
   assert.equal(fresh.metadata.validation.passed, true);
   const names = doc => Object.fromEntries(Object.entries(doc.ordinals).map(([k, v]) => [k, v.name]));
   assert.deepEqual(names(fresh), names(table));
 });
 
-test('Cover 4 Quarters in book 522 resolves 11/11 with quarters zones and EA provenance', () => {
+test('Cover 4 Quarters in book 522 resolves 11/11 with quarters zones and EA provenance', { skip: SKIP_DEFENSE }, () => {
   const auth = resolveAuthoritativeDefense({
     defensiveStore: store,
     liveCall: { available: true, set: '3-3 Odd', name: 'Cover 4 Quarters' },
@@ -145,13 +148,13 @@ test('Cover 4 Quarters in book 522 resolves 11/11 with quarters zones and EA pro
   assert.match(defensiveAuthorityLogLine(auth), /\[DEF-AUTH\] book=522 formation=Nickel set=3-3 Odd play=Cover 4 Quarters resolved=true .*knownAssignments=11\/11/);
 });
 
-test('case and whitespace differences in live names still resolve exactly', () => {
+test('case and whitespace differences in live names still resolve exactly', { skip: SKIP_DEFENSE }, () => {
   const auth = resolveAuthoritativeDefense({ defensiveStore: store, liveCall: { available: true, set: ' 3-3 odd', name: 'COVER 4  QUARTERS ' }, bookId: 522 });
   assert.equal(auth.knownAssignments, 11);
   assert.equal(auth.resolution.matchTier, 'normalized');
 });
 
-test('blitz play resolves authored blitzers and rushers', () => {
+test('blitz play resolves authored blitzers and rushers', { skip: SKIP_DEFENSE }, () => {
   const auth = resolveAuthoritativeDefense({ defensiveStore: store, liveCall: { available: true, set: 'Tite', name: 'Saw Blitz 3' }, bookId: 522 });
   assert.equal(auth.knownAssignments, 11);
   assert.equal(auth.summary.rushers, 5);
@@ -159,7 +162,7 @@ test('blitz play resolves authored blitzers and rushers', () => {
   assert.ok(auth.rush.filter(r => r.blitz).every(r => r.routeType === 'AssignRouteType_DefBlitz'));
 });
 
-test('man play resolves Def_Man receiver numbering', () => {
+test('man play resolves Def_Man receiver numbering', { skip: SKIP_DEFENSE }, () => {
   const auth = resolveAuthoritativeDefense({ defensiveStore: store, liveCall: { available: true, set: 'Over', name: 'Cover 1 Hole' }, bookId: 503 });
   assert.equal(auth.status, 'resolved');
   assert.equal(auth.summary.coverageMode, 'MIXED');
@@ -168,7 +171,7 @@ test('man play resolves Def_Man receiver numbering', () => {
   assert.ok(auth.man.every(m => m.responsibility === 'MAN' && m.manTarget >= 1 && m.manTarget <= 5));
 });
 
-test('ambiguous corpus match stays partial and never claims 11/11', () => {
+test('ambiguous corpus match stays partial and never claims 11/11', { skip: SKIP_DEFENSE }, () => {
   const auth = resolveAuthoritativeDefense({ defensiveStore: store, liveCall: { available: true, set: 'Over', name: 'Cover 4 Quarters' } });
   assert.equal(auth.available, true);
   assert.equal(auth.status, 'partial');
@@ -181,21 +184,21 @@ test('ambiguous corpus match stays partial and never claims 11/11', () => {
   assert.match(defensiveAuthorityLogLine(auth), /knownAssignments=\d+\/11/);
 });
 
-test('play outside the exported corpus is unresolved, not approximated', () => {
+test('play outside the exported corpus is unresolved, not approximated', { skip: SKIP_DEFENSE }, () => {
   const auth = resolveAuthoritativeDefense({ defensiveStore: store, liveCall: { available: true, set: '3-3 Stack', name: 'Cover 2 Man' } });
   assert.equal(auth.available, false);
   assert.equal(auth.status, 'unresolved');
   assert.equal(auth.provenance, null);
 });
 
-test('special-teams return plays stay partially resolved', () => {
+test('special-teams return plays stay partially resolved', { skip: SKIP_DEFENSE }, () => {
   const book = store.doc.books['522'];
   const row = book.plays.find(p => book.formations[p[1]]?.name === 'Kick Return');
   const players = store.expandStructure(row[6]);
   assert.ok(players.some(p => !p.known));
 });
 
-test('opponent book tracker narrows candidates across a game and ignores out-of-corpus calls', () => {
+test('opponent book tracker narrows candidates across a game and ignores out-of-corpus calls', { skip: SKIP_DEFENSE }, () => {
   const tracker = new OpponentDefenseBookTracker();
   const a = tracker.observe(store, { setName: '3-3 Wide Jack', playName: 'CB Zone Blitz Press' });
   assert.ok(a.length >= 2);
@@ -207,7 +210,7 @@ test('opponent book tracker narrows candidates across a game and ignores out-of-
   assert.equal(auth.resolution.evidence, 'NARROWED_BOOKS');
 });
 
-test('whole-corpus statistics: every scrimmage defensive play fully resolves', () => {
+test('whole-corpus statistics: every scrimmage defensive play fully resolves', { skip: SKIP_DEFENSE }, () => {
   const m = store.metadata;
   assert.equal(m.nonElevenPlayer, 0);
   assert.ok(m.fullyResolvedPct > 90);

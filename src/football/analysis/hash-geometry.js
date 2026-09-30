@@ -18,6 +18,11 @@ function resolvePlayOrientation(play = {}, authoritative = null) {
   const authoredSide = normalizeSide(authored.orientationSide || authored.runDirection || authored.direction || authored.side);
   if (authoredSide) return { side: authoredSide, confidence: 'HIGH', provenance: 'EA_AUTHORED' };
 
+  // Derived from EA-authored run hole or width-route geometry
+  // (offensive-profile.derivedOrientation).
+  const profileSide = normalizeSide(play.normalizedProfile?.orientationSide);
+  if (profileSide) return { side: profileSide, confidence: 'MEDIUM', provenance: play.normalizedProfile.orientationProvenance || 'DERIVED' };
+
   return { side: null, confidence: 'UNKNOWN', provenance: null };
 }
 
