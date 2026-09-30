@@ -203,13 +203,18 @@ test('ordinary offense result -> next huddle still works', () => {
   const coordinatorWindow = new CoordinatorWindow({ autoOpen: false });
   const { io } = makeIo();
 
-  coordinatorWindow.showResult({ event: { play: { name: 'HB Duo' }, result: { yards: 6, firstDown: true } } }, {});
-  assert.equal(coordinatorWindow.state.phase, 'result');
+  coordinatorWindow.showRecommendation({
+    available: true,
+    play: { id: 'next', name: 'HB Duo', formation: 'I Form Pro' },
+    reasons: ['next call'],
+  }, firstOffensiveHuddleState());
+  coordinatorWindow.showResult({ event: { play: { name: 'Previous Play' }, result: { yards: 6, firstDown: true } } }, firstOffensiveHuddleState());
+  assert.equal(coordinatorWindow.state.phase, 'huddle', 'result presentation must not replace the active huddle phase');
+  assert.match(coordinatorWindow.state.result, /Previous Play: \+6 yards/);
 
   handleNewSituation(engine, playbooks, firstOffensiveHuddleState(), 'stale-key', 'post-result-key', io, coordinatorWindow);
 
   assert.equal(coordinatorWindow.state.phase, 'huddle');
-  assert.equal(coordinatorWindow.state.result, null);
 });
 
 test('offense/defense possession transition still works after the fix', () => {
