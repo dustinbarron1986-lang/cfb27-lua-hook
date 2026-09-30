@@ -75,6 +75,14 @@ function classifyOffensiveStructure(play = {}, authoritative = null) {
   const text = textFromPlay(play, authoritative);
   const authored = authoritative?.play || null;
   const authoredSource = authoritative?.status === 'resolved' ? PROVENANCE.EA_AUTHORED : PROVENANCE.DERIVED_STRUCTURAL;
+  const catalogKind = String(play.playKind || play.type || '').toUpperCase();
+  const fallbackIdentity = normalize([play.name, play.primaryConcept, ...(play.modifiers || [])].filter(Boolean).join(' '));
+  const explicitRpo = Boolean(
+    authoritative?.classification?.rpo ||
+    /RPO/i.test(String(authored?.offensePlayType || '')) ||
+    catalogKind === 'RPO' ||
+    (!catalogKind && /\brpo\b/.test(fallbackIdentity))
+  );
 
   const signal = (key, regex, weight = 1, provenance = PROVENANCE.HEURISTIC) => {
     if (regex.test(text)) addSignal(threats, key, weight, provenance, `text:${key}`);
@@ -95,7 +103,7 @@ function classifyOffensiveStructure(play = {}, authoritative = null) {
   signal('vertical', /\bverticals?\b|\bfour verts?\b|\b4 verts?\b|\ball go\b|\bgo route\b|\bshot\b/, 1.05);
   signal('perimeter_access', /\bbubble\b|\bsmoke\b|\bflat\b|\bspeed out\b|\bquick out\b|\bnow screen\b/, 0.9);
 
-  modifier('RPO_CONFLICT', /\brpo\b|\bglance\b.*\bzone\b|\bzone\b.*\bstick\b/, 1.2);
+  if (explicitRpo) addSignal(modifiers, 'RPO_CONFLICT', 1.2, authoredSource, 'explicit-rpo-mechanism');
   modifier('PLAY_ACTION', /\bplay action\b|\bpa\b/, 1.0);
   modifier('MOTION', /\bmotion\b|\bjet\b|\borbit\b/, 0.8);
   modifier('PULLER', /\bcounter\b|\bpower\b|\btrap\b|\bgt\b/, 0.8);
@@ -133,7 +141,7 @@ function classifyOffensiveStructure(play = {}, authoritative = null) {
     else if (route.maxDepth >= 9) addSignal(threats, 'intermediate_middle', 0.25, PROVENANCE.DERIVED_STRUCTURAL, `route-depth:${route.maxDepth}`);
   }
 
-  if (/\brpo\b/.test(text)) {
+  if (explicitRpo) {
     if (!threats.has('interior_run') && !threats.has('perimeter_run') && !threats.has('gap_run')) {
       addSignal(threats, 'interior_run', 0.6, PROVENANCE.DERIVED_STRUCTURAL, 'rpo-run-component');
     }
