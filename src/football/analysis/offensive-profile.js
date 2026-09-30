@@ -108,15 +108,31 @@ function buildOffensiveProfile(play = {}, authoritativeStructure = null) {
     play.name,
   ].filter(Boolean).join(' '));
 
+  const catalogKind = String(play.playKind || play.type || '').toUpperCase();
+  const fallbackIdentity = normalize([
+    play.name,
+    play.primaryConcept,
+    ...(play.modifiers || []),
+  ].filter(Boolean).join(' '));
+  const authoritativeOption = !classification?.rpo &&
+    (classification?.qbActions || []).some(opcode => /OPTION/i.test(String(opcode)));
+
   let decisionClass = 'pass';
-  if (classification?.rpo || /\brpo\b|\boption\b/.test(raw)) decisionClass = 'hybrid';
-  else if (classification?.run || String(play.type || '').toUpperCase() === 'RUN') decisionClass = 'run';
+  if (classification?.rpo || authoritativeOption) decisionClass = 'hybrid';
+  else if (classification) decisionClass = classification.run ? 'run' : 'pass';
+  else if (catalogKind === 'RPO' || catalogKind === 'OPTION') decisionClass = 'hybrid';
+  else if (catalogKind === 'RUN') decisionClass = 'run';
+  else if (catalogKind === 'PASS' || catalogKind === 'SCREEN') decisionClass = 'pass';
+  else if (/\brpo\b/.test(fallbackIdentity) ||
+    /\b(read option|zone read|veer|speed option|power read)\b/.test(fallbackIdentity)) decisionClass = 'hybrid';
+  else if (/\b(qb draw|qb power|qb counter|inside zone|outside zone|stretch|duo|dive|power|counter|trap|wham|toss|sweep)\b/.test(fallbackIdentity)) decisionClass = 'run';
 
   let playMechanism = decisionClass === 'pass' ? 'dropback' : null;
-  if (classification?.rpo || /\brpo\b/.test(raw)) playMechanism = 'rpo';
-  else if (/\boption\b|\bread option\b/.test(raw)) playMechanism = 'option';
-  else if (/\bdesigned qb run\b|\bqb (draw|power|counter)\b/.test(raw)) playMechanism = 'designed_qb_run';
-  else if (classification?.screen || /\bscreen\b|\bbubble\b/.test(raw)) playMechanism = 'screen';
+  if (classification?.rpo || catalogKind === 'RPO' || (!catalogKind && /\brpo\b/.test(fallbackIdentity))) playMechanism = 'rpo';
+  else if (authoritativeOption || catalogKind === 'OPTION' ||
+    (!catalogKind && /\b(read option|zone read|veer|speed option|power read)\b/.test(fallbackIdentity))) playMechanism = 'option';
+  else if (/\bdesigned qb run\b|\bqb (draw|power|counter)\b/.test(fallbackIdentity)) playMechanism = 'designed_qb_run';
+  else if (classification?.screen || catalogKind === 'SCREEN' || /\bscreen\b|\bbubble\b/.test(fallbackIdentity)) playMechanism = 'screen';
   else if (classification?.playAction || /\bplay action\b|\bpa\b/.test(raw)) playMechanism = 'play_action';
 
   const runConcept = conceptFromText(raw, RUN_CONCEPTS);
