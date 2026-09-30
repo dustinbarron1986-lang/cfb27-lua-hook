@@ -45,6 +45,8 @@ function normalizeHash(value, fieldY = null) {
 function offenseDirection(situation = {}) {
   const direct = finiteOrNull(situation.offenseDirection);
   if (direct != null && Math.abs(direct) >= 0.01) return Math.sign(direct);
+  // The live placeholder lineToGain (fieldX + distance) carries no direction.
+  if (situation.lineToGainSource === 'PLACEHOLDER') return null;
   const fieldX = finiteOrNull(situation.fieldX);
   const lineToGain = finiteOrNull(situation.lineToGain);
   if (fieldX == null || lineToGain == null || Math.abs(lineToGain - fieldX) < 0.01) return null;
@@ -92,13 +94,15 @@ function fieldBoundaryGeometry(situation = {}) {
 
   const boundaryPhysical = hash === HASH.LEFT ? 'LEFT' : 'RIGHT';
   const fieldPhysical = invertSide(boundaryPhysical);
+  // Offense-relative field/boundary needs the direction of travel; a physical
+  // side is never reported as if it were offense-relative.
   return {
     hash,
     offenseDirection: direction,
     fieldSidePhysical: fieldPhysical,
     boundarySidePhysical: boundaryPhysical,
-    fieldSide: relativeSide(fieldPhysical, direction),
-    boundarySide: relativeSide(boundaryPhysical, direction),
+    fieldSide: direction == null ? null : relativeSide(fieldPhysical, direction),
+    boundarySide: direction == null ? null : relativeSide(boundaryPhysical, direction),
     provenance: situation.hash && String(situation.hash).toLowerCase() !== 'unknown'
       ? 'LOCAL_OBSERVED'
       : 'DERIVED',

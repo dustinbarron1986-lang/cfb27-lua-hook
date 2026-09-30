@@ -43,8 +43,10 @@ function scoreSituation(play, situation = {}) {
   }
 
   // Field position.
-  if (yardLine != null) {
-    if (yardLine <= 10) {
+  if (yardLine != null || yardsToGoal != null) {
+    // yardLine alone is ambiguous (the marker number is the same at both
+    // ends), so "backed up" requires a direction-aware yards-to-goal.
+    if (yardsToGoal != null && yardsToGoal >= 90) {
       if (hasConcept(play, "deep_drop", "slow_developing")) {
         score -= 1.5; reasons.push("backed-up field position increases sack/safety cost");
       }
@@ -63,28 +65,13 @@ function scoreSituation(play, situation = {}) {
     }
   }
 
-  // Score/clock strategy.
+  // Score/clock strategy has one owner per fact (no stacked votes):
+  //   leading late  -> strategicPlayScore (graded four-minute strength, below)
+  //   trailing late -> drive objective fit (TWO_MINUTE / QUICK_SCORE)
+  // Only the late-clock sack/clock cost of slow development stays here.
   const late = quarter >= 4 && clock != null && clock <= 360;
-  if (late && scoreDiff < 0) {
-    if (isPass(play) || hasConcept(play, "sideline", "no_huddle", "quick_game")) {
-      score += 1.1; reasons.push("trailing late favors clock-efficient yardage");
-    }
-    if (hasConcept(play, "slow_developing") && clock <= 120) {
-      score -= 0.8; reasons.push("slow development carries extra late-game clock/sack cost");
-    }
-  }
-
-  if (late && scoreDiff > 0) {
-    if (isRun(play)) {
-      score += 1.1; reasons.push("leading late favors clock pressure and lower-variance calls");
-    }
-    if (hasConcept(play, "deep_shot", "high_variance")) {
-      score -= 1.3; reasons.push("unnecessary high variance while protecting a late lead");
-    }
-  }
-
-  if (flags.fourMinute && isRun(play)) {
-    score += 0.8; reasons.push("four-minute context rewards possession and clock pressure");
+  if (late && scoreDiff < 0 && hasConcept(play, "slow_developing") && clock <= 120) {
+    score -= 0.8; reasons.push("slow development carries extra late-game clock/sack cost");
   }
 
   const strategic = strategicPlayScore(play, situation);

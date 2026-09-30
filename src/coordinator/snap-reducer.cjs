@@ -41,10 +41,32 @@ function normalizeState(raw) {
   };
 }
 
+// Direction of travel for yard accounting: the coordinator-annotated value
+// (FieldDirectionTracker) when known, else the lineToGain geometry. Legacy
+// callers without annotation keep the historical lineToGain behaviour.
 function offenseDirection(start) {
+  const annotated = finite(start.offenseDirection);
+  if (annotated != null && annotated !== 0) return Math.sign(annotated);
   const delta = finite(start.lineToGain) - finite(start.fieldX);
   if (!Number.isFinite(delta) || Math.abs(delta) < 0.01) return null;
   return Math.sign(delta);
+}
+
+// Yards gained. A same-possession snap that advances the down reports the
+// gain directly as the change in distance, independent of field direction.
+function snapYards(start, next) {
+  const samePossession = next.possession === start.possession && next.quarter === start.quarter;
+  const startDistance = finite(start.distance);
+  const nextDistance = finite(next.distance);
+  if (samePossession && next.down === start.down + 1 && startDistance != null && nextDistance != null) {
+    return { yards: startDistance - nextDistance, source: 'DOWN_DISTANCE' };
+  }
+  const direction = offenseDirection(start);
+  if (direction == null) return { yards: 0, source: 'UNKNOWN_DIRECTION' };
+  const source = start.offenseDirectionSource && start.offenseDirectionSource !== 'UNKNOWN'
+    ? start.offenseDirectionSource
+    : 'LINE_TO_GAIN_GEOMETRY';
+  return { yards: (next.fieldX - start.fieldX) * direction, source };
 }
 
 function scoreForPossession(state, possession) {
@@ -119,9 +141,8 @@ function isAdministrativeReset(start, next, evidence = transitionEvidence(start,
 }
 
 function buildCompletedSnap(start, next) {
-  const direction = offenseDirection(start);
-  const rawYards = direction == null ? 0 : (next.fieldX - start.fieldX) * direction;
-  const yards = Math.round(rawYards * 10) / 10;
+  const measured = snapYards(start, next);
+  const yards = Math.round(measured.yards * 10) / 10;
   const possessionChanged = next.possession !== start.possession;
   const scoreBefore = scoreForPossession(start, start.possession);
   const scoreAfter = scoreForPossession(next, next.possession);
@@ -138,6 +159,7 @@ function buildCompletedSnap(start, next) {
     defenseCall: callFromState(start, 'defense'),
     result: {
       yards,
+      yardsSource: measured.source,
       firstDown,
       touchdown,
       turnover,

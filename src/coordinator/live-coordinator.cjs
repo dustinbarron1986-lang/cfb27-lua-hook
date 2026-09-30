@@ -24,6 +24,7 @@ const {
 const { EaDefensivePlayStore } = require('../football/knowledge/ea-defensive-play-store');
 const { coverageFamilyFromAuthority } = require('../football/analysis/structural-threat-model');
 const { GamePhaseTracker } = require('./game-phase-tracker.cjs');
+const { FieldDirectionTracker, verifiedLineToGainDirection, yardsToGoalFromDirection } = require('./field-direction-tracker.cjs');
 const { oracleStrategicDecision } = require('../football/gameplan/strategic-context');
 const {
   resolveFreshOffensiveAuthority,
@@ -80,8 +81,18 @@ async function tailCursor(client) {
   return cursor;
 }
 
+// Offense direction along fieldX: the coordinator-annotated direction (see
+// FieldDirectionTracker), else a Lua-verified lineToGain. The placeholder
+// lineToGain (fieldX + distance) never implies a direction.
+function stateOffenseDirection(state = {}) {
+  const annotated = Number(state.offenseDirection);
+  if (state.offenseDirection != null && Number.isFinite(annotated) && annotated !== 0) return Math.sign(annotated);
+  return verifiedLineToGainDirection(state);
+}
+
 function situationFromState(state) {
   const directDiff = Number(state?.scoreDifferential);
+  const direction = stateOffenseDirection(state || {});
   const hasDirectDiff = Number.isFinite(directDiff);
   const userIsHome = typeof state?.userIsHome === 'boolean' ? state.userIsHome : null;
   const home = Number(state?.homeScore);
@@ -100,11 +111,12 @@ function situationFromState(state) {
     fieldY: state.fieldY,
     lineToGain: state.lineToGain,
     yardLine: state.yardLine,
-    yardsToGoal: Number.isFinite(Number(state.yardLine)) ? Math.max(0, 100 - Number(state.yardLine)) : null,
+    // yardLine is only the yard-marker number (50 - |fieldX|); yards to goal
+    // needs the direction of travel and is unknown rather than mirrored.
+    yardsToGoal: yardsToGoalFromDirection(state.fieldX, direction),
     hash: state.hash || 'unknown',
-    offenseDirection: Number.isFinite(Number(state.lineToGain)) && Number.isFinite(Number(state.fieldX)) && Math.abs(Number(state.lineToGain) - Number(state.fieldX)) > 0.01
-      ? Math.sign(Number(state.lineToGain) - Number(state.fieldX))
-      : null,
+    offenseDirection: direction,
+    offenseDirectionSource: state.offenseDirectionSource || (direction != null ? 'VERIFIED_LINE_TO_GAIN' : 'UNKNOWN'),
     offenseScore,
     defenseScore,
     scoreDifferential: hasDirectDiff
@@ -887,14 +899,12 @@ function snapToFootballEvent(snap, playbooks) {
     down: snap.start.down,
     distance: snap.start.distance,
     yardLine: snap.start.yardLine,
-    yardsToGoal: Number.isFinite(Number(snap.start.yardLine)) ? Math.max(0, 100 - Number(snap.start.yardLine)) : null,
+    yardsToGoal: yardsToGoalFromDirection(snap.start.fieldX, stateOffenseDirection(snap.start)),
     fieldX: snap.start.fieldX,
     fieldY: snap.start.fieldY,
     lineToGain: snap.start.lineToGain,
     hash: snap.start.hash || 'unknown',
-    offenseDirection: Number.isFinite(Number(snap.start.lineToGain)) && Number.isFinite(Number(snap.start.fieldX)) && Math.abs(Number(snap.start.lineToGain) - Number(snap.start.fieldX)) > 0.01
-      ? Math.sign(Number(snap.start.lineToGain) - Number(snap.start.fieldX))
-      : null,
+    offenseDirection: stateOffenseDirection(snap.start),
     quarter: snap.start.quarter,
     clockSeconds: snap.start.gameClockSeconds,
     playClockSeconds: snap.start.playClockSeconds,
@@ -1126,6 +1136,8 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   }
   const reducer = new SnapReducer();
   const phaseTracker = new GamePhaseTracker();
+  const fieldDirection = new FieldDirectionTracker();
+  let lastFieldDirectionKey = null;
   let lastSituationKey = null;
   let lastExecutionKey = null;
   let lastOracleRecommendationKey = null;
@@ -1212,6 +1224,11 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
       if (lifecycleEvent) {
         io.log(`[GAME] ${lifecycleEvent} | phase=${phaseResolved.phase} | quarterSource=${phaseResolved.quarterSource} | scoreSource=${phaseResolved.scoreDifferentialSource}`);
       }
+      // Direction of travel is annotated BEFORE the reducer sees the state so
+      // completed-snap yards and yards-to-goal use it.
+      const directionNow = fieldDirection.direction(state);
+      state.offenseDirection = directionNow.direction;
+      state.offenseDirectionSource = directionNow.source;
       const reduced = reducer.ingest(state);
       if (reduced.type === 'ignored') continue;
 
@@ -1219,6 +1236,14 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
       // first Stage-1 call for the new huddle see performance, sequence,
       // self-scout and resulting field/hash state.
       finalizeCompletedSnap(engine, reduced, playbooks, coordinatorWindow, io);
+      if (reduced.type === 'completed_snap' && reduced.snap?.start && reduced.snap?.end) {
+        fieldDirection.observeTransition(reduced.snap.start, reduced.snap.end);
+      }
+      const directionKey = [directionNow.direction ?? 'x', directionNow.source, directionNow.frame, state.hashSource || '', state.hash || ''].join('|');
+      if (directionKey !== lastFieldDirectionKey) {
+        io.log(`[FIELD] direction=${directionNow.direction ?? '?'} source=${directionNow.source} frame=${directionNow.frame} hash=${state.hash || 'unknown'} hashSource=${state.hashSource || 'UNAVAILABLE'} lineToGainSource=${state.lineToGainSource || '?'}`);
+        lastFieldDirectionKey = directionKey;
+      }
 
       const current = reduced.type === 'completed_snap' ? reduced.nextState : reduced.state;
       if (current) {
@@ -1372,6 +1397,7 @@ module.exports = {
   runLiveCoordinator,
   tailCursor,
   situationFromState,
+  stateOffenseDirection,
   snapToFootballEvent,
   isOffensiveScrimmageSituation,
   buildOracleAudibleScope,

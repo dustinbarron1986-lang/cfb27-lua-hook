@@ -206,8 +206,48 @@ local function publish_state()
     local distance   = read_u32(state + 0x180)
     local fieldX     = read_i32(state + 0x184)
 
-    -- Placeholder pending a verified offset: direction (sign) is a guess, not RE-confirmed.
+    -- Placeholder unless the position-block candidate below verifies: its sign
+    -- carries no direction information (the coordinator treats it as such).
     local lineToGain = fieldX + distance
+    local lineToGainSource = "PLACEHOLDER"
+
+    -- Lateral ball position (hash). On the previous build the float position
+    -- block lived at situation +0x1A18 (fieldY) / +0x1A1C (fieldX); every
+    -- verified scalar field has since moved by exactly -0x1020, so the block is
+    -- read as a CANDIDATE at +0x9F8 / +0x9FC. It is trusted only when its float
+    -- fieldX agrees with the verified i32 fieldX above and fieldY is a plausible
+    -- lateral value; otherwise hash stays "unknown". Reads are range-guarded by
+    -- the host, so a wrong candidate raises a Lua error, never a game fault.
+    local fieldY = nil
+    local hash = "unknown"
+    local positionBlockVerified = false
+    local fieldXFloatCandidate = nil
+    local fieldYCandidate = nil
+    local blockOk, blockX, blockY = pcall(function()
+        return read_f32(state + 0x9FC), read_f32(state + 0x9F8)
+    end)
+    if blockOk and is_finite(blockX) and is_finite(blockY) then
+        fieldXFloatCandidate = blockX
+        fieldYCandidate = blockY
+        -- An all-zero region must not "agree" with a ball at midfield.
+        local zeroRegion = blockX == 0 and blockY == 0
+        if not zeroRegion and math.abs(blockX - fieldX) <= 1.5 and math.abs(blockY) <= 30 then
+            positionBlockVerified = true
+            fieldY = blockY
+            hash = hash_label(blockY)
+        end
+    end
+
+    -- Line to gain from the same block (previous build +0x1A70 -> +0xA50).
+    -- Trusted only when the block verified AND its distance from the ball
+    -- equals the down's distance; then its sign is the offense direction.
+    if positionBlockVerified and distance > 0 then
+        local ltgOk, ltg = pcall(read_f32, state + 0xA50)
+        if ltgOk and is_finite(ltg) and math.abs(math.abs(ltg - fieldXFloatCandidate) - distance) <= 1.0 then
+            lineToGain = ltg
+            lineToGainSource = "POSITION_BLOCK_VERIFIED"
+        end
+    end
 
     local yardLine = round(50 - math.abs(fieldX))
     local possessionLabel = possession_label(possession)
@@ -261,7 +301,7 @@ local function publish_state()
     )
 
     local signature = string.format(
-        "%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%s",
+        "%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%s:%s",
         gameClock,
         playClock,
         homeScore,
@@ -271,6 +311,7 @@ local function publish_state()
         down,
         distance,
         fieldX,
+        hash,
         offensiveSignature,
         defensiveSignature
     )
@@ -306,8 +347,13 @@ local function publish_state()
 
         fieldX = fieldX,
         lineToGain = lineToGain,
+        lineToGainSource = lineToGainSource,
         yardLine = yardLine,
-        hash = "unknown",
+        fieldY = fieldY,
+        hash = hash,
+        hashSource = positionBlockVerified and "POSITION_BLOCK_VERIFIED" or "UNAVAILABLE",
+        fieldXFloatCandidate = fieldXFloatCandidate,
+        fieldYCandidate = fieldYCandidate,
 
         offensiveCallAvailable = offensiveCall.available,
         offensiveCallStatus = offensiveCall.status,
