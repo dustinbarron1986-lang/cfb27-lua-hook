@@ -31,7 +31,9 @@ class PerformanceStore {
     this.events = Array.isArray(initialEvents) ? [...initialEvents] : [];
   }
 
-  record(event) { this.events.push(event); }
+  // `version` changes whenever the event log changes, so derived summaries can
+  // be memoized exactly instead of recomputed per candidate.
+  record(event) { this.events.push(event); this.version = (this.version || 0) + 1; }
   getAll() { return [...this.events]; }
   getRecent(limit = 10) { return this.events.slice(-Math.max(0, Number(limit) || 0)); }
 

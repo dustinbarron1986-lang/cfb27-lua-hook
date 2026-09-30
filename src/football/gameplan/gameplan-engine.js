@@ -548,10 +548,12 @@ function validSheet(sheet, playbook, gameplanId) {
 class SetupState {
   constructor() {
     this.rows = [];
+    this._summaryMemo = null;
   }
 
   reset() {
     this.rows = [];
+    this._summaryMemo = null;
   }
 
   record(event) {
@@ -667,7 +669,15 @@ class SetupState {
     };
   }
 
+  // Read once per ranked candidate; rebuilt only when rows change.
   summary() {
+    if (this._summaryMemo && this._summaryMemo.length === this.rows.length) return this._summaryMemo.value;
+    const value = this._summary();
+    this._summaryMemo = { length: this.rows.length, value };
+    return value;
+  }
+
+  _summary() {
     const formations = {};
     const concepts = {};
     const mix = { run: 0, hybrid: 0, pass: 0, screen: 0, playAction: 0, shot: 0 };

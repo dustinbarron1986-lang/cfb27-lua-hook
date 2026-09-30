@@ -12,6 +12,16 @@ class SelfScout {
   constructor(store) { this.store = store; }
 
   summarize() {
+    // Called once per ranked candidate; the result only changes when a snap
+    // is recorded.
+    const version = this.store.version ?? null;
+    if (version != null && this._memo && this._memo.version === version) return this._memo.value;
+    const value = this._summarize();
+    if (version != null) this._memo = { version, value };
+    return value;
+  }
+
+  _summarize() {
     const rows = trailingUserDrive(this.store.getAll());
     const formations = {};
     const families = {};

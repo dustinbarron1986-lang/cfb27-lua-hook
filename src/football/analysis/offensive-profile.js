@@ -254,8 +254,16 @@ class OffensiveProfileProvider {
     return this.cache.get(playKey);
   }
 
+  // Profiles are pure functions of the (stable) playbook play and its EA
+  // authority, so they are built once per play object rather than per huddle.
   profile(play) {
-    return buildOffensiveProfile(play, this._authority(play));
+    if (!play || typeof play !== 'object') return buildOffensiveProfile(play, this._authority(play));
+    if (!this.profiles) this.profiles = new WeakMap();
+    const cached = this.profiles.get(play);
+    if (cached) return cached;
+    const built = buildOffensiveProfile(play, this._authority(play));
+    this.profiles.set(play, built);
+    return built;
   }
 }
 

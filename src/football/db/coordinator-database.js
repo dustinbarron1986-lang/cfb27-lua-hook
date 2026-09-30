@@ -193,6 +193,7 @@ class CoordinatorDatabase {
       (id, name, side, sort_order, visible, show_on_custom, asset_name, source_file, play_count)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    this._catalogNameIndex = null;
     const insertPlay = this.db.prepare(`
       INSERT OR REPLACE INTO plays
       (catalog_id, side, name, play_kind, play_type, classification, formation_id, set_id, run_hole,
@@ -310,13 +311,31 @@ class CoordinatorDatabase {
     }));
   }
 
+  // The static catalog (~15k rows) is indexed by lower(name) once per side;
+  // the previous per-call `WHERE lower(name) = lower(?)` scanned the whole
+  // table for every play of a loaded book (~3 s per offense book load).
+  _catalogRowsByName(side) {
+    const key = side || '*';
+    if (!this._catalogNameIndex) this._catalogNameIndex = new Map();
+    let index = this._catalogNameIndex.get(key);
+    if (!index) {
+      index = new Map();
+      const rows = this.db.prepare(`
+        SELECT * FROM plays WHERE (? IS NULL OR side = ?) ORDER BY catalog_id
+      `).all(side || null, side || null);
+      for (const row of rows) {
+        const lowered = String(row.name || '').toLowerCase();
+        const list = index.get(lowered);
+        if (list) list.push(row);
+        else index.set(lowered, [row]);
+      }
+      this._catalogNameIndex.set(key, index);
+    }
+    return index;
+  }
+
   catalogPlaysByName(name, { side = 'offense' } = {}) {
-    const rows = this.db.prepare(`
-      SELECT *
-      FROM plays
-      WHERE lower(name) = lower(?) AND (? IS NULL OR side = ?)
-      ORDER BY catalog_id
-    `).all(String(name || ''), side || null, side || null);
+    const rows = this._catalogRowsByName(side).get(String(name || '').toLowerCase()) || [];
     return rows.map(row => ({
       catalogId: row.catalog_id,
       side: row.side,

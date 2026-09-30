@@ -3,6 +3,24 @@ const { evaluateOffensiveCandidate } = require("./counter-model");
 const { objectiveFit } = require("../gameplan/drive-objective");
 const { hashGeometryScore } = require("../analysis/hash-geometry");
 const { fourMinuteStrength } = require("../gameplan/strategic-context");
+const { classifyOffensiveStructure } = require("../analysis/structural-threat-model");
+
+// The authority-free structural threat classification of a playbook play is
+// stable, so it is computed once per play object (regex-heavy, ~500 plays).
+const structuralCache = new WeakMap();
+function cachedStructure(play) {
+  if (!play || typeof play !== 'object') return undefined;
+  if (play.structural) return play.structural;
+  // Authority-aware callers classify with the authored structure; leave them
+  // on their original path.
+  if (play.authoritativeStructure) return undefined;
+  let structure = structuralCache.get(play);
+  if (!structure) {
+    structure = classifyOffensiveStructure(play);
+    structuralCache.set(play, structure);
+  }
+  return structure;
+}
 
 // Local CFB27 evidence gains influence smoothly with sample size; the same
 // constant retires the generic empirical prior as local attempts accumulate.
@@ -234,7 +252,7 @@ class PlaySelectionEngine {
       const normalizedProfile = this.offensiveProfiles?.profile
         ? this.offensiveProfiles.profile(originalPlay)
         : (originalPlay.normalizedProfile || {});
-      const play = { ...originalPlay, normalizedProfile };
+      const play = { ...originalPlay, normalizedProfile, structural: cachedStructure(originalPlay) };
       const situationPart = scoreSituation(play, situation);
       const empiricalSituation = this.empiricalPrior?.situationEvidence
         ? this.empiricalPrior.situationEvidence(situation, normalizedProfile)
