@@ -1,6 +1,7 @@
 'use strict';
 
 const QUARTER_SOURCE = Object.freeze({
+  CONSENSUS: 'CONSENSUS',
   AUTHORITATIVE_API: 'AUTHORITATIVE_API',
   MEMORY: 'MEMORY',
   DERIVED_CLOCK_WRAP: 'DERIVED_CLOCK_WRAP',
@@ -47,13 +48,8 @@ class GamePhaseTracker {
     this.quarterSource = QUARTER_SOURCE.UNAVAILABLE;
     this.quarterConfidence = 'LOW';
     this.previousClock = null;
-    this.previousMemoryQuarter = null;
     this.periodHighWater = null;
-    this.memoryStale = false;
-    this.apiStale = false;
-    this.lastWrapClock = null;
     this.phase = 'UNKNOWN';
-    this.lastLifecycle = null;
     this.finalEmitted = false;
   }
 
@@ -67,70 +63,77 @@ class GamePhaseTracker {
     return previousClock <= lowThreshold && nextClock >= highThreshold && largeJump;
   }
 
+  _apply(quarter, source, confidence) {
+    this.resolvedQuarter = validQuarter(quarter);
+    this.quarterSource = source;
+    this.quarterConfidence = confidence;
+  }
+
   resolve(raw = {}) {
     const memoryQuarter = validQuarter(raw.rawQuarter ?? raw.memoryQuarter ?? raw.quarter);
     const apiQuarter = validQuarter(raw.apiQuarter ?? raw.authoritativeQuarter);
     const clock = finite(raw.apiGameClockSeconds) ?? finite(raw.gameClockSeconds);
+    const sourcesAgree = memoryQuarter != null && apiQuarter != null && memoryQuarter === apiQuarter;
+    const sourceDisagreement = memoryQuarter != null && apiQuarter != null && memoryQuarter !== apiQuarter;
 
     if (clock != null && (this.periodHighWater == null || clock > this.periodHighWater)) {
       this.periodHighWater = clock;
     }
 
     const wrap = this._isStrongClockWrap(this.previousClock, clock);
+    const priorQuarter = this.resolvedQuarter;
 
     if (wrap) {
-      const base = this.resolvedQuarter ?? apiQuarter ?? memoryQuarter ?? 1;
-      const apiAdvanced = apiQuarter != null && apiQuarter > base;
-      const memoryAdvanced = memoryQuarter != null && memoryQuarter > base;
-      if (apiAdvanced) {
-        this.resolvedQuarter = apiQuarter;
-        this.quarterSource = QUARTER_SOURCE.AUTHORITATIVE_API;
-        this.quarterConfidence = 'HIGH';
-        this.apiStale = false;
-        this.memoryStale = memoryQuarter != null && memoryQuarter !== apiQuarter;
-      } else if (memoryAdvanced) {
-        this.resolvedQuarter = memoryQuarter;
-        this.quarterSource = QUARTER_SOURCE.MEMORY;
-        this.quarterConfidence = 'MEDIUM';
-        this.memoryStale = false;
-        this.apiStale = apiQuarter != null && apiQuarter < memoryQuarter;
-      } else {
-        this.resolvedQuarter = Math.max(1, base + 1);
-        this.quarterSource = QUARTER_SOURCE.DERIVED_CLOCK_WRAP;
-        this.quarterConfidence = 'MEDIUM';
-        this.memoryStale = memoryQuarter != null && memoryQuarter < this.resolvedQuarter;
-        this.apiStale = apiQuarter != null && apiQuarter < this.resolvedQuarter;
-      }
-      this.lastWrapClock = clock;
+      const base = priorQuarter ?? (sourcesAgree ? memoryQuarter : null) ?? memoryQuarter ?? apiQuarter ?? 1;
+      const expected = Math.max(1, Number(base) + 1);
+      const memoryMatches = memoryQuarter === expected;
+      const apiMatches = apiQuarter === expected;
+
+      if (memoryMatches && apiMatches) this._apply(expected, QUARTER_SOURCE.CONSENSUS, 'HIGH');
+      else if (memoryMatches) this._apply(expected, QUARTER_SOURCE.MEMORY, 'HIGH');
+      else if (apiMatches) this._apply(expected, QUARTER_SOURCE.AUTHORITATIVE_API, 'HIGH');
+      else this._apply(expected, QUARTER_SOURCE.DERIVED_CLOCK_WRAP, 'MEDIUM');
+
       this.periodHighWater = clock;
-    } else if (apiQuarter != null && (!this.apiStale || this.resolvedQuarter == null || apiQuarter >= this.resolvedQuarter)) {
-      this.resolvedQuarter = apiQuarter;
-      this.quarterSource = QUARTER_SOURCE.AUTHORITATIVE_API;
-      this.quarterConfidence = 'HIGH';
-      this.apiStale = false;
-      this.memoryStale = memoryQuarter != null && memoryQuarter !== apiQuarter;
-    } else if (this.resolvedQuarter == null && memoryQuarter != null) {
-      this.resolvedQuarter = memoryQuarter;
-      this.quarterSource = QUARTER_SOURCE.MEMORY;
-      this.quarterConfidence = 'MEDIUM';
-    } else if (!this.memoryStale && memoryQuarter != null && (
-      this.resolvedQuarter == null || memoryQuarter >= this.resolvedQuarter
-    )) {
-      this.resolvedQuarter = memoryQuarter;
-      this.quarterSource = QUARTER_SOURCE.MEMORY;
-      this.quarterConfidence = 'MEDIUM';
-    } else if (this.resolvedQuarter == null) {
-      this.quarterSource = QUARTER_SOURCE.UNAVAILABLE;
-      this.quarterConfidence = 'LOW';
+    } else if (sourcesAgree) {
+      if (priorQuarter == null || memoryQuarter >= priorQuarter) {
+        this._apply(memoryQuarter, QUARTER_SOURCE.CONSENSUS, 'HIGH');
+      } else {
+        this._apply(priorQuarter, this.quarterSource, 'MEDIUM');
+      }
+    } else if (sourceDisagreement) {
+      if (priorQuarter != null && memoryQuarter === priorQuarter && apiQuarter !== priorQuarter) {
+        this._apply(priorQuarter, QUARTER_SOURCE.MEMORY, 'MEDIUM');
+      } else if (priorQuarter != null && apiQuarter === priorQuarter && memoryQuarter !== priorQuarter) {
+        this._apply(priorQuarter, QUARTER_SOURCE.AUTHORITATIVE_API, 'MEDIUM');
+      } else if (priorQuarter != null) {
+        this._apply(priorQuarter, this.quarterSource, 'LOW');
+      } else {
+        // At startup a disagreement is evidence of uncertainty, not evidence
+        // that GETQUARTER is authoritative. Use memory as the conservative
+        // candidate without applying a hard-coded offset.
+        this._apply(memoryQuarter, QUARTER_SOURCE.MEMORY, 'LOW');
+      }
+    } else if (memoryQuarter != null) {
+      if (priorQuarter == null || memoryQuarter >= priorQuarter) this._apply(memoryQuarter, QUARTER_SOURCE.MEMORY, 'MEDIUM');
+      else this._apply(priorQuarter, this.quarterSource, 'LOW');
+    } else if (apiQuarter != null) {
+      if (priorQuarter == null || apiQuarter >= priorQuarter) {
+        // Numeric validity alone does not earn HIGH confidence.
+        this._apply(apiQuarter, QUARTER_SOURCE.AUTHORITATIVE_API, 'MEDIUM');
+      } else {
+        this._apply(priorQuarter, this.quarterSource, 'LOW');
+      }
+    } else if (priorQuarter != null) {
+      this._apply(priorQuarter, this.quarterSource, 'LOW');
+    } else {
+      this._apply(null, QUARTER_SOURCE.UNAVAILABLE, 'LOW');
     }
 
     const previousPhase = this.phase;
-    const resolvedPhase = phaseFromQuarter(this.resolvedQuarter);
-    let phase = resolvedPhase;
+    let phase = phaseFromQuarter(this.resolvedQuarter);
     let lifecycle = lifecycleForState(raw);
 
-    // Once Q4 reaches the end, do not call the game FINAL without a verified
-    // final signal. A subsequent Q5+ transition resolves this as overtime.
     if (!lifecycle && this.resolvedQuarter === 4 && clock != null && clock <= 1) {
       phase = 'END_REGULATION_PENDING';
       lifecycle = previousPhase !== 'END_REGULATION_PENDING' ? 'END_REGULATION_PENDING' : null;
@@ -138,12 +141,7 @@ class GamePhaseTracker {
       phase = phaseFromQuarter(this.resolvedQuarter);
     }
 
-    // Halftime is emitted once when the authoritative/derived phase crosses
-    // from the first half into Q3. It remains a lifecycle event rather than a
-    // fake quarter value.
-    if (!lifecycle && this.resolvedQuarter === 3 && previousPhase === 'Q2') {
-      lifecycle = 'HALFTIME';
-    }
+    if (!lifecycle && this.resolvedQuarter === 3 && previousPhase === 'Q2') lifecycle = 'HALFTIME';
 
     if (lifecycle === 'FINAL') {
       phase = 'FINAL';
@@ -153,7 +151,6 @@ class GamePhaseTracker {
 
     this.phase = phase;
     this.previousClock = clock;
-    this.previousMemoryQuarter = memoryQuarter;
 
     const directDiff = finite(raw.scoreDifferentialApi ?? raw.userScoreDifferential ?? raw.scoreDifferential);
     const scoreDifferential = directDiff;
@@ -164,12 +161,15 @@ class GamePhaseTracker {
           ? (raw.scoreDifferentialSource || SCORE_SOURCE.USER_RELATIVE_TELEMETRY)
           : SCORE_SOURCE.UNAVAILABLE);
 
+    const quarterEvidenceConflict = sourceDisagreement && !wrap;
     const state = {
       ...raw,
       rawQuarter: memoryQuarter,
+      apiQuarter,
       quarter: this.resolvedQuarter,
       quarterSource: this.quarterSource,
       quarterConfidence: this.quarterConfidence,
+      quarterEvidenceConflict,
       gamePhase: phase,
       gameClockSeconds: clock ?? raw.gameClockSeconds,
       scoreDifferential,
@@ -182,8 +182,11 @@ class GamePhaseTracker {
       previousPhase,
       phase,
       quarter: this.resolvedQuarter,
+      memoryQuarter,
+      apiQuarter,
       quarterSource: this.quarterSource,
       quarterConfidence: this.quarterConfidence,
+      quarterEvidenceConflict,
       clockWrapDetected: wrap,
       periodHighWater: this.periodHighWater,
       scoreDifferential,
