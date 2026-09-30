@@ -197,8 +197,9 @@ local function publish_state()
     local clockApi = safe_global_number("GETTIMEREMAINING", 0, 60 * 60)
     local scoreDiffApi = safe_global_number("GETSCOREDIFF", -200, 200)
     local quarterDisagreement = quarterApi ~= nil and quarterMemory ~= nil and quarterApi ~= quarterMemory
-    -- Neither source becomes authoritative merely because its numeric value is valid.
-    -- GamePhaseTracker reconciles both sources with lifecycle/clock-wrap evidence.
+    -- GamePhaseTracker treats a valid memory quarter (1..20) as authoritative,
+    -- uses GETQUARTER only when memory is invalid, and derives from clock wraps
+    -- only when neither direct source is usable. Startup reads of 0 are invalid.
     local quarter = quarterMemory or quarterApi
     local possession = cfb.read_u8(state + 0x178)
     local down       = read_u32(state + 0x17C)

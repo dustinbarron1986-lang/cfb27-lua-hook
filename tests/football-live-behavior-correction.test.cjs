@@ -16,11 +16,13 @@ function tick(tracker, rawQuarter, apiQuarter, gameClockSeconds, extra = {}) {
   return tracker.resolve({ rawQuarter, apiQuarter, gameClockSeconds, ...extra });
 }
 
-test('Q1 memory/API disagreement cannot silently become high-confidence Q2', () => {
+test('Q1 memory/API disagreement cannot become Q2: direct memory is authoritative', () => {
   const tracker = new GamePhaseTracker();
   const r = tick(tracker, 1, 2, 540);
   assert.equal(r.quarter, 1);
-  assert.equal(r.quarterConfidence, 'LOW');
+  assert.equal(r.quarterSource, 'DIRECT_MEMORY');
+  assert.equal(r.quarterConfidence, 'HIGH');
+  // GETQUARTER disagreement is kept as a diagnostic only.
   assert.equal(r.quarterEvidenceConflict, true);
 });
 
@@ -43,10 +45,10 @@ test('clock-wrap evidence advances periods; halftime and overtime remain support
   assert.equal(q5.phase, 'OT1');
 });
 
-test('stale memory/API cannot regress an established quarter', () => {
+test('valid direct memory quarter wins over prior state and a conflicting API value', () => {
   const a = new GamePhaseTracker();
   tick(a, 2, 2, 400);
-  assert.equal(tick(a, 1, 2, 390).quarter, 2);
+  assert.equal(tick(a, 1, 2, 390).quarter, 1);
   const b = new GamePhaseTracker();
   tick(b, 2, 2, 400);
   assert.equal(tick(b, 2, 1, 390).quarter, 2);
@@ -119,4 +121,45 @@ test('hash is part of stable huddle identity at normalized granularity', () => {
   const base={possession:0,quarter:1,down:1,distance:10,fieldX:20,lineToGain:30};
   assert.notEqual(situationIdentityKey({...base,hash:'left'}),situationIdentityKey({...base,hash:'right'}));
   assert.equal(situationIdentityKey({...base,fieldY:-8}),situationIdentityKey({...base,fieldY:-9}));
+});
+
+test('startup 0:00 with unavailable quarter cannot create a fake wrap into Q2', () => {
+  // Live log: memory=? api=? clock=0:00, then memory=1 clock=9:00 resolved Q2.
+  const tracker = new GamePhaseTracker();
+  const startup = tracker.resolve({ rawQuarter: 0, apiQuarter: null, gameClockSeconds: 0 });
+  assert.equal(startup.quarter, null);
+  assert.equal(startup.quarterSource, 'UNAVAILABLE');
+  const live = tracker.resolve({ rawQuarter: 1, apiQuarter: null, gameClockSeconds: 540 });
+  assert.equal(live.quarter, 1);
+  assert.equal(live.phase, 'Q1');
+  assert.equal(live.quarterSource, 'DIRECT_MEMORY');
+  assert.equal(live.clockWrapDetected, false);
+  assert.equal(live.directQuarterStaleSuspect, false);
+
+  // Even with no direct quarter at all, 0:00 -> 9:00 at startup is not a wrap.
+  const blind = new GamePhaseTracker();
+  blind.resolve({ rawQuarter: 0, gameClockSeconds: 0 });
+  const blindLive = blind.resolve({ rawQuarter: 0, gameClockSeconds: 540 });
+  assert.equal(blindLive.clockWrapDetected, false);
+  assert.equal(blindLive.quarter, null);
+});
+
+test('valid direct Q2/Q3/Q4 beat conflicting derived or stale state', () => {
+  const tracker = new GamePhaseTracker();
+  tick(tracker, 1, null, 600);
+  tracker.resolve({ rawQuarter: 0, gameClockSeconds: 5 });
+  assert.equal(tracker.resolve({ rawQuarter: 0, gameClockSeconds: 598 }).quarterSource, 'DERIVED_CLOCK_WRAP');
+  // Direct Q2 arrives: it is the quarter, whatever derivation believed.
+  assert.equal(tick(tracker, 2, null, 590).quarterSource, 'DIRECT_MEMORY');
+  // Direct Q3 beats stale previous Q2 state.
+  const q3 = tick(tracker, 3, 2, 600);
+  assert.equal(q3.quarter, 3);
+  assert.equal(q3.lifecycle, 'HALFTIME');
+  // Direct Q4 beats a wrap inference that would otherwise produce Q4+1.
+  tick(tracker, 4, null, 600);
+  tick(tracker, 4, null, 5);
+  const q4 = tick(tracker, 4, null, 598);
+  assert.equal(q4.quarter, 4);
+  assert.equal(q4.clockWrapDetected, true);
+  assert.equal(q4.directQuarterStaleSuspect, true);
 });

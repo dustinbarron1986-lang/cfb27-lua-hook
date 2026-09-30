@@ -1,10 +1,23 @@
 'use strict';
 
+// Quarter authority is deterministic, not a confidence vote:
+//
+//   1. a valid direct memory quarter (situation root +0x174) IS the quarter;
+//   2. a valid GETQUARTER value is used only when memory is absent/invalid;
+//   3. clock-wrap derivation is a fallback used only when neither direct
+//      source is usable.
+//
+// Clock-wrap evidence never overrides a direct source. When a direct value
+// stays unchanged across a strong wrap, the tracker reports
+// `directQuarterStaleSuspect` for diagnostics but still reports the direct
+// value; live logs then show the disagreement instead of silently inventing a
+// period.
+
 const QUARTER_SOURCE = Object.freeze({
-  CONSENSUS: 'CONSENSUS',
+  DIRECT_MEMORY: 'DIRECT_MEMORY',
   AUTHORITATIVE_API: 'AUTHORITATIVE_API',
-  MEMORY: 'MEMORY',
   DERIVED_CLOCK_WRAP: 'DERIVED_CLOCK_WRAP',
+  CARRIED_FORWARD: 'CARRIED_FORWARD',
   UNAVAILABLE: 'UNAVAILABLE',
 });
 
@@ -16,7 +29,7 @@ const SCORE_SOURCE = Object.freeze({
 
 function finite(value) {
   const n = Number(value);
-  return Number.isFinite(n) ? n : null;
+  return value != null && value !== '' && Number.isFinite(n) ? n : null;
 }
 
 function validQuarter(value) {
@@ -36,6 +49,15 @@ function lifecycleForState(state = {}) {
   return null;
 }
 
+function directMemoryQuarter(raw) {
+  // `rawQuarter` is the Lua memory read. `quarter` is only treated as memory
+  // when the payload does not carry the explicit memory field (older fixtures
+  // and adapters).
+  if (raw.rawQuarter !== undefined) return validQuarter(raw.rawQuarter);
+  if (raw.memoryQuarter !== undefined) return validQuarter(raw.memoryQuarter);
+  return validQuarter(raw.quarter);
+}
+
 class GamePhaseTracker {
   constructor(options = {}) {
     this.minWrapLowSeconds = Number(options.minWrapLowSeconds || 20);
@@ -48,6 +70,9 @@ class GamePhaseTracker {
     this.quarterSource = QUARTER_SOURCE.UNAVAILABLE;
     this.quarterConfidence = 'LOW';
     this.previousClock = null;
+    // Highest clock value observed in the current period BEFORE the current
+    // sample. A wrap requires that the clock was actually seen running down
+    // from this value; a startup/uninitialized 0:00 sample establishes nothing.
     this.periodHighWater = null;
     this.phase = 'UNKNOWN';
     this.finalEmitted = false;
@@ -55,9 +80,12 @@ class GamePhaseTracker {
 
   _isStrongClockWrap(previousClock, nextClock) {
     if (previousClock == null || nextClock == null) return false;
-    const highWater = Math.max(Number(this.periodHighWater || 0), nextClock, previousClock);
+    const highWater = Number(this.periodHighWater);
     if (!(highWater > 0)) return false;
     const lowThreshold = Math.max(this.minWrapLowSeconds, highWater * 0.08);
+    // The period must have been observed well above the low threshold before
+    // the low sample; otherwise the "low" sample is not an end-of-period event.
+    if (highWater <= lowThreshold) return false;
     const highThreshold = highWater * this.wrapHighFraction;
     const largeJump = nextClock - previousClock >= Math.max(45, highWater * 0.45);
     return previousClock <= lowThreshold && nextClock >= highThreshold && largeJump;
@@ -70,64 +98,38 @@ class GamePhaseTracker {
   }
 
   resolve(raw = {}) {
-    const memoryQuarter = validQuarter(raw.rawQuarter ?? raw.memoryQuarter ?? raw.quarter);
+    const memoryQuarter = directMemoryQuarter(raw);
     const apiQuarter = validQuarter(raw.apiQuarter ?? raw.authoritativeQuarter);
     const clock = finite(raw.apiGameClockSeconds) ?? finite(raw.gameClockSeconds);
-    const sourcesAgree = memoryQuarter != null && apiQuarter != null && memoryQuarter === apiQuarter;
-    const sourceDisagreement = memoryQuarter != null && apiQuarter != null && memoryQuarter !== apiQuarter;
-
-    if (clock != null && (this.periodHighWater == null || clock > this.periodHighWater)) {
-      this.periodHighWater = clock;
-    }
-
-    const wrap = this._isStrongClockWrap(this.previousClock, clock);
     const priorQuarter = this.resolvedQuarter;
+    const wrap = this._isStrongClockWrap(this.previousClock, clock);
 
-    if (wrap) {
-      const base = priorQuarter ?? (sourcesAgree ? memoryQuarter : null) ?? memoryQuarter ?? apiQuarter ?? 1;
-      const expected = Math.max(1, Number(base) + 1);
-      const memoryMatches = memoryQuarter === expected;
-      const apiMatches = apiQuarter === expected;
-
-      if (memoryMatches && apiMatches) this._apply(expected, QUARTER_SOURCE.CONSENSUS, 'HIGH');
-      else if (memoryMatches) this._apply(expected, QUARTER_SOURCE.MEMORY, 'HIGH');
-      else if (apiMatches) this._apply(expected, QUARTER_SOURCE.AUTHORITATIVE_API, 'HIGH');
-      else this._apply(expected, QUARTER_SOURCE.DERIVED_CLOCK_WRAP, 'MEDIUM');
-
-      this.periodHighWater = clock;
-    } else if (sourcesAgree) {
-      if (priorQuarter == null || memoryQuarter >= priorQuarter) {
-        this._apply(memoryQuarter, QUARTER_SOURCE.CONSENSUS, 'HIGH');
-      } else {
-        this._apply(priorQuarter, this.quarterSource, 'MEDIUM');
-      }
-    } else if (sourceDisagreement) {
-      if (priorQuarter != null && memoryQuarter === priorQuarter && apiQuarter !== priorQuarter) {
-        this._apply(priorQuarter, QUARTER_SOURCE.MEMORY, 'MEDIUM');
-      } else if (priorQuarter != null && apiQuarter === priorQuarter && memoryQuarter !== priorQuarter) {
-        this._apply(priorQuarter, QUARTER_SOURCE.AUTHORITATIVE_API, 'MEDIUM');
-      } else if (priorQuarter != null) {
-        this._apply(priorQuarter, this.quarterSource, 'LOW');
-      } else {
-        // At startup a disagreement is evidence of uncertainty, not evidence
-        // that GETQUARTER is authoritative. Use memory as the conservative
-        // candidate without applying a hard-coded offset.
-        this._apply(memoryQuarter, QUARTER_SOURCE.MEMORY, 'LOW');
-      }
-    } else if (memoryQuarter != null) {
-      if (priorQuarter == null || memoryQuarter >= priorQuarter) this._apply(memoryQuarter, QUARTER_SOURCE.MEMORY, 'MEDIUM');
-      else this._apply(priorQuarter, this.quarterSource, 'LOW');
+    if (memoryQuarter != null) {
+      this._apply(memoryQuarter, QUARTER_SOURCE.DIRECT_MEMORY, 'HIGH');
     } else if (apiQuarter != null) {
-      if (priorQuarter == null || apiQuarter >= priorQuarter) {
-        // Numeric validity alone does not earn HIGH confidence.
-        this._apply(apiQuarter, QUARTER_SOURCE.AUTHORITATIVE_API, 'MEDIUM');
-      } else {
-        this._apply(priorQuarter, this.quarterSource, 'LOW');
-      }
+      this._apply(apiQuarter, QUARTER_SOURCE.AUTHORITATIVE_API, 'HIGH');
+    } else if (wrap && priorQuarter != null) {
+      this._apply(priorQuarter + 1, QUARTER_SOURCE.DERIVED_CLOCK_WRAP, 'MEDIUM');
     } else if (priorQuarter != null) {
-      this._apply(priorQuarter, this.quarterSource, 'LOW');
+      const carriedSource = this.quarterSource === QUARTER_SOURCE.DERIVED_CLOCK_WRAP
+        ? QUARTER_SOURCE.DERIVED_CLOCK_WRAP
+        : QUARTER_SOURCE.CARRIED_FORWARD;
+      this._apply(priorQuarter, carriedSource, carriedSource === QUARTER_SOURCE.DERIVED_CLOCK_WRAP ? 'MEDIUM' : 'LOW');
     } else {
       this._apply(null, QUARTER_SOURCE.UNAVAILABLE, 'LOW');
+    }
+
+    const directQuarter = memoryQuarter ?? apiQuarter;
+    const directQuarterStaleSuspect = wrap && directQuarter != null && priorQuarter != null &&
+      directQuarter === priorQuarter;
+
+    // Period high-water bookkeeping: a new period (wrap or direct quarter
+    // change) starts a fresh high-water mark at the current clock.
+    const periodChanged = wrap || (priorQuarter != null && this.resolvedQuarter !== priorQuarter);
+    if (clock != null) {
+      if (periodChanged || this.periodHighWater == null || clock > this.periodHighWater) {
+        this.periodHighWater = clock;
+      }
     }
 
     const previousPhase = this.phase;
@@ -137,8 +139,6 @@ class GamePhaseTracker {
     if (!lifecycle && this.resolvedQuarter === 4 && clock != null && clock <= 1) {
       phase = 'END_REGULATION_PENDING';
       lifecycle = previousPhase !== 'END_REGULATION_PENDING' ? 'END_REGULATION_PENDING' : null;
-    } else if (!lifecycle && this.resolvedQuarter != null && this.resolvedQuarter >= 5) {
-      phase = phaseFromQuarter(this.resolvedQuarter);
     }
 
     if (!lifecycle && this.resolvedQuarter === 3 && previousPhase === 'Q2') lifecycle = 'HALFTIME';
@@ -152,8 +152,7 @@ class GamePhaseTracker {
     this.phase = phase;
     this.previousClock = clock;
 
-    const directDiff = finite(raw.scoreDifferentialApi ?? raw.userScoreDifferential ?? raw.scoreDifferential);
-    const scoreDifferential = directDiff;
+    const scoreDifferential = finite(raw.scoreDifferentialApi ?? raw.userScoreDifferential ?? raw.scoreDifferential);
     const scoreDifferentialSource =
       finite(raw.scoreDifferentialApi) != null
         ? SCORE_SOURCE.AUTHORITATIVE_API
@@ -161,7 +160,9 @@ class GamePhaseTracker {
           ? (raw.scoreDifferentialSource || SCORE_SOURCE.USER_RELATIVE_TELEMETRY)
           : SCORE_SOURCE.UNAVAILABLE);
 
-    const quarterEvidenceConflict = sourceDisagreement && !wrap;
+    // Diagnostic only: GETQUARTER disagreeing with a valid memory quarter does
+    // not change the resolved quarter or its confidence.
+    const quarterEvidenceConflict = memoryQuarter != null && apiQuarter != null && memoryQuarter !== apiQuarter;
     const state = {
       ...raw,
       rawQuarter: memoryQuarter,
@@ -184,10 +185,12 @@ class GamePhaseTracker {
       quarter: this.resolvedQuarter,
       memoryQuarter,
       apiQuarter,
+      directQuarter,
       quarterSource: this.quarterSource,
       quarterConfidence: this.quarterConfidence,
       quarterEvidenceConflict,
       clockWrapDetected: wrap,
+      directQuarterStaleSuspect,
       periodHighWater: this.periodHighWater,
       scoreDifferential,
       scoreDifferentialSource,

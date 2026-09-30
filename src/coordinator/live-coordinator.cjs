@@ -1155,12 +1155,13 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
         phaseResolved.memoryQuarter ?? 'x', phaseResolved.apiQuarter ?? 'x', phaseResolved.quarter ?? 'x',
         phaseResolved.quarterSource, phaseResolved.quarterConfidence,
         phaseResolved.quarterEvidenceConflict ? 'conflict' : 'agree',
-        phaseResolved.clockWrapDetected ? 'wrap' : 'steady', lifecycleEvent || '',
+        phaseResolved.clockWrapDetected ? 'wrap' : 'steady',
+        phaseResolved.directQuarterStaleSuspect ? 'stale' : '', lifecycleEvent || '',
       ].join('|');
       if (phaseDiagnosticKey !== lastPhaseDiagnosticKey &&
           (phaseResolved.quarterEvidenceConflict || phaseResolved.clockWrapDetected || lifecycleEvent ||
            phaseResolved.quarter !== lastPhaseQuarter || phaseResolved.quarterSource !== lastPhaseSource)) {
-        io.log(`[PHASE] memory=${phaseResolved.memoryQuarter ?? '?'} api=${phaseResolved.apiQuarter ?? '?'} resolved=${phaseResolved.quarter ?? '?'} source=${phaseResolved.quarterSource} confidence=${phaseResolved.quarterConfidence} clock=${fmtClock(state.gameClockSeconds)} wrap=${phaseResolved.clockWrapDetected ? 'yes' : 'no'}`);
+        io.log(`[PHASE] directQuarter=${phaseResolved.memoryQuarter ?? '?'} api=${phaseResolved.apiQuarter ?? '?'} resolved=${phaseResolved.quarter ?? '?'} source=${phaseResolved.quarterSource} confidence=${phaseResolved.quarterConfidence} clock=${fmtClock(state.gameClockSeconds)} wrap=${phaseResolved.clockWrapDetected ? 'yes' : 'no'}${phaseResolved.directQuarterStaleSuspect ? ' staleSuspect=yes' : ''}`);
       }
       lastPhaseDiagnosticKey = phaseDiagnosticKey;
       lastPhaseQuarter = phaseResolved.quarter;

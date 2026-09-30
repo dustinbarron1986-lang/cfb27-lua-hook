@@ -67,14 +67,30 @@ function recordEvent(play, success = true, situation = { possession: 0, down: 1,
   };
 }
 
-test('stale quarter=1 advances exactly once on a strong clock wrap', () => {
+// Direct memory quarter is authoritative; clock-wrap derivation only fills a
+// telemetry gap (rawQuarter absent/invalid). `rawQuarter: 0` models the
+// uninitialized/invalid u8 read that Lua emits during a gap.
+const gap = gameClockSeconds => ({ rawQuarter: 0, gameClockSeconds });
+
+test('direct memory quarter=1 is not advanced by a strong clock wrap (stale suspect is diagnostic only)', () => {
   const tracker = new GamePhaseTracker();
   assert.equal(tracker.resolve({ quarter: 1, gameClockSeconds: 600 }).quarter, 1);
   tracker.resolve({ quarter: 1, gameClockSeconds: 8 });
-  const q2 = tracker.resolve({ quarter: 1, gameClockSeconds: 596 });
+  const after = tracker.resolve({ quarter: 1, gameClockSeconds: 596 });
+  assert.equal(after.quarter, 1);
+  assert.equal(after.quarterSource, QUARTER_SOURCE.DIRECT_MEMORY);
+  assert.equal(after.clockWrapDetected, true);
+  assert.equal(after.directQuarterStaleSuspect, true);
+});
+
+test('fallback clock wrap advances exactly once only when direct quarter telemetry is absent', () => {
+  const tracker = new GamePhaseTracker();
+  assert.equal(tracker.resolve({ rawQuarter: 1, gameClockSeconds: 600 }).quarter, 1);
+  tracker.resolve(gap(8));
+  const q2 = tracker.resolve(gap(596));
   assert.equal(q2.quarter, 2);
   assert.equal(q2.quarterSource, QUARTER_SOURCE.DERIVED_CLOCK_WRAP);
-  const duplicate = tracker.resolve({ quarter: 1, gameClockSeconds: 596 });
+  const duplicate = tracker.resolve(gap(596));
   assert.equal(duplicate.quarter, 2);
 });
 
@@ -89,44 +105,60 @@ test('ordinary clock correction does not fabricate a quarter transition', () => 
 
 test('derived quarter learns variable period high-water rather than assuming ten minutes', () => {
   const tracker = new GamePhaseTracker();
-  tracker.resolve({ quarter: 1, gameClockSeconds: 900 });
-  tracker.resolve({ quarter: 1, gameClockSeconds: 10 });
-  const q2 = tracker.resolve({ quarter: 1, gameClockSeconds: 894 });
+  tracker.resolve({ rawQuarter: 1, gameClockSeconds: 900 });
+  tracker.resolve(gap(10));
+  const q2 = tracker.resolve(gap(894));
   assert.equal(q2.quarter, 2);
   assert.ok(q2.periodHighWater >= 894);
 });
 
-test('conflicting GETQUARTER does not outrank memory without lifecycle evidence', () => {
+test('conflicting GETQUARTER does not outrank a valid memory quarter', () => {
   const tracker = new GamePhaseTracker();
   const row = tracker.resolve({ rawQuarter: 1, apiQuarter: 3, gameClockSeconds: 550 });
   assert.equal(row.quarter, 1);
-  assert.equal(row.quarterConfidence, 'LOW');
+  assert.equal(row.quarterSource, QUARTER_SOURCE.DIRECT_MEMORY);
+  assert.equal(row.quarterConfidence, 'HIGH');
   assert.equal(row.quarterEvidenceConflict, true);
 });
 
-test('second clock wrap emits halftime lifecycle; third reaches Q4', () => {
+test('GETQUARTER is used when memory quarter is invalid', () => {
   const tracker = new GamePhaseTracker();
-  tracker.resolve({ quarter: 1, gameClockSeconds: 600 });
-  tracker.resolve({ quarter: 1, gameClockSeconds: 5 });
-  tracker.resolve({ quarter: 1, gameClockSeconds: 598 }); // Q2
-  tracker.resolve({ quarter: 1, gameClockSeconds: 4 });
-  const halftime = tracker.resolve({ quarter: 1, gameClockSeconds: 599 }); // Q3
+  const row = tracker.resolve({ rawQuarter: 0, apiQuarter: 3, gameClockSeconds: 550 });
+  assert.equal(row.quarter, 3);
+  assert.equal(row.quarterSource, QUARTER_SOURCE.AUTHORITATIVE_API);
+  assert.equal(row.quarterEvidenceConflict, false);
+});
+
+test('fallback: second clock wrap emits halftime lifecycle; third reaches Q4', () => {
+  const tracker = new GamePhaseTracker();
+  tracker.resolve({ rawQuarter: 1, gameClockSeconds: 600 });
+  tracker.resolve(gap(5));
+  tracker.resolve(gap(598)); // Q2
+  tracker.resolve(gap(4));
+  const halftime = tracker.resolve(gap(599)); // Q3
   assert.equal(halftime.quarter, 3);
   assert.equal(halftime.lifecycle, 'HALFTIME');
-  tracker.resolve({ quarter: 1, gameClockSeconds: 3 });
-  const q4 = tracker.resolve({ quarter: 1, gameClockSeconds: 597 });
+  tracker.resolve(gap(3));
+  const q4 = tracker.resolve(gap(597));
   assert.equal(q4.quarter, 4);
 });
 
-test('Q4 end is pending, then a wrap becomes OT1 without premature FINAL', () => {
+test('Q4 end is pending, then OT1 without premature FINAL (direct and fallback)', () => {
   const tracker = new GamePhaseTracker();
   tracker.resolve({ apiQuarter: 4, gameClockSeconds: 40 });
   const pending = tracker.resolve({ apiQuarter: 4, gameClockSeconds: 0 });
   assert.equal(pending.phase, 'END_REGULATION_PENDING');
   assert.equal(pending.lifecycle, 'END_REGULATION_PENDING');
-  const ot = tracker.resolve({ rawQuarter: 4, gameClockSeconds: 600 });
+  const ot = tracker.resolve({ rawQuarter: 5, gameClockSeconds: 600 });
   assert.equal(ot.phase, 'OT1');
   assert.notEqual(ot.lifecycle, 'FINAL');
+
+  const fallback = new GamePhaseTracker();
+  fallback.resolve({ rawQuarter: 4, gameClockSeconds: 40 });
+  fallback.resolve(gap(0));
+  const derivedOt = fallback.resolve(gap(600));
+  assert.equal(derivedOt.phase, 'OT1');
+  assert.equal(derivedOt.quarterSource, QUARTER_SOURCE.DERIVED_CLOCK_WRAP);
 });
 
 test('verified user-relative score differential reaches late-game situation flags', () => {
@@ -251,11 +283,11 @@ test('halftime gameplan switch preserves first-half setup memory and applies a n
   assert.equal(engine.getCallSheet(book).gameplanId, 'ground_control');
 });
 
-test('real-game regression fixture reaches Q4 with stale quarter and Ground Control does not lose run inventory', () => {
+test('real-game regression fixture reaches Q4 through a quarter-telemetry gap and Ground Control does not lose run inventory', () => {
   const tracker = new GamePhaseTracker();
   const clocks = [600, 4, 598, 3, 599, 2, 597];
   let resolved = null;
-  for (const gameClockSeconds of clocks) resolved = tracker.resolve({ quarter: 1, gameClockSeconds });
+  clocks.forEach((gameClockSeconds, i) => { resolved = tracker.resolve(i === 0 ? { rawQuarter: 1, gameClockSeconds } : gap(gameClockSeconds)); });
   assert.equal(resolved.quarter, 4);
 
   const book = syntheticGroundBook();
