@@ -14,6 +14,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const {
+  playbookIdFromFilename,
+  parseFormationSetList,
+  parsePlays: parseXmlPlays,
+} = require('../src/football/knowledge/ea-playbook-xml');
 
 function parseArgs(argv) {
   const sourceDir = argv[0];
@@ -24,54 +29,12 @@ function parseArgs(argv) {
   return { sourceDir: path.resolve(sourceDir) };
 }
 
-function playbookIdFromFilename(filename) {
-  const m = filename.match(/^playbook_(def|off)-(\d+)\.XML$/i);
-  if (!m) return null;
-  return { side: m[1].toLowerCase() === 'def' ? 'defense' : 'offense', id: Number(m[2]) };
-}
-
-// Extracts form_id -> { name, sets: { set_id -> set_name } } from the raw
-// <formation_set_list> block. Regex-based on purpose: the export format is a
-// small, regular, already-verified structure, and the project has no XML
-// parsing dependency today -- adding one just for this would be unjustified.
-function parseFormationSetList(xmlText) {
-  const formations = {};
-  const listMatch = xmlText.match(/<formation_set_list>([\s\S]*?)<\/formation_set_list>/);
-  if (!listMatch) return formations;
-
-  const formRegex = /<formation\s+form_name="([^"]*)"\s+ord="[^"]*"\s+form_id="(-?\d+)"\s*>([\s\S]*?)<\/formation>/g;
-  let fm;
-  while ((fm = formRegex.exec(listMatch[1]))) {
-    const [, formName, formId, body] = fm;
-    if (!formations[formId]) formations[formId] = { name: formName, sets: {} };
-    const setRegex = /<set\s+set_id="(-?\d+)"\s+set_name="([^"]*)"\s+form_id="(-?\d+)"\s+ord="[^"]*"\s*\/>/g;
-    let sm;
-    while ((sm = setRegex.exec(body))) {
-      const [, setId, setName] = sm;
-      formations[formId].sets[setId] = setName;
-    }
-  }
-  return formations;
-}
-
-// Only formation_id/set_id are needed to join; play_name is captured purely
-// for integrity-check reporting (unresolved-reference messages).
+// Parsing lives in src/football/knowledge/ea-playbook-xml.js, shared with the
+// defensive authority compiler. Only formation_id/set_id are needed to join;
+// play_name is captured purely for integrity-check reporting.
 function parsePlays(xmlText) {
-  const plays = [];
-  const playRegex = /<play\b([^>]*?)\/?>/g;
-  let pm;
-  while ((pm = playRegex.exec(xmlText))) {
-    const attrs = pm[1];
-    const get = name => {
-      const m = attrs.match(new RegExp(name + '="([^"]*)"'));
-      return m ? m[1] : null;
-    };
-    const formationId = get('formation_id');
-    const setId = get('set_id');
-    if (formationId == null || setId == null) continue;
-    plays.push({ playName: get('play_name'), formationId, setId });
-  }
-  return plays;
+  return parseXmlPlays(xmlText, { players: false })
+    .map(play => ({ playName: play.playName, formationId: play.formationId, setId: play.setId }));
 }
 
 function buildLocations(sourceDir) {
