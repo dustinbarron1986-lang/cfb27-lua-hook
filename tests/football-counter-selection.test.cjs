@@ -181,7 +181,7 @@ test('response success ranks a working answer above a failing answer inside the 
 });
 
 test('offensive structure remains multi-label for an RPO', () => {
-  const structure = classifyOffensiveStructure({ name: 'RPO Zone Stick', type: 'PASS', concepts: [] });
+  const structure = classifyOffensiveStructure({ name: 'RPO Zone Stick', type: 'PASS', playKind: 'RPO', concepts: [] });
   assert.ok(structure.threatKeys.includes('interior_run'));
   assert.ok(structure.threatKeys.includes('quick_horizontal'));
   assert.ok(structure.modifierKeys.includes('RPO_CONFLICT'));
