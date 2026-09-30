@@ -976,7 +976,6 @@ class CoordinatorWindow {
       planReason: null,
       audibleRecommendation: null,
       preSnapRecommendation: null,
-,
       error: null,
       updatedAt: new Date().toISOString()
     };
