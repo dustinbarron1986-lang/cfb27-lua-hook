@@ -25,6 +25,56 @@ function bounded(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function historicalDefenseInfluence(sampleSize) {
+  const n = Math.max(0, Number(sampleSize) || 0);
+  return Number((0.55 * (n / (n + 12))).toFixed(4));
+}
+
+function recentContextualResult(events, play, situation = {}, sequenceAligned = false) {
+  const id = play?.id == null ? null : String(play.id);
+  if (!id) return { score:0, rawScore:0, failures:0, successes:0, reasons:[] };
+  const band = d => {
+    const n = Number(d);
+    if (!Number.isFinite(n)) return 'unknown';
+    if (n <= 3) return 'short';
+    if (n <= 7) return 'medium';
+    return 'long';
+  };
+  const matches = [];
+  let sameDrive = true;
+  for (let i = (events || []).length - 1; i >= 0 && matches.length < 4; i -= 1) {
+    const event = events[i] || {};
+    if (situation.possession != null && event.situation?.possession != null &&
+        Number(event.situation.possession) !== Number(situation.possession)) {
+      sameDrive = false;
+      continue;
+    }
+    if (String(event.play?.id ?? '') !== id) continue;
+    const sameDown = Number(event.situation?.down) === Number(situation.down);
+    const eventDistance = Number(event.situation?.distance);
+    const targetDistance = Number(situation.distance);
+    const similarDistance = band(eventDistance) === band(targetDistance) ||
+      (Number.isFinite(eventDistance) && Number.isFinite(targetDistance) && Math.abs(eventDistance-targetDistance) <= 2);
+    if (!sameDown || !similarDistance) continue;
+    const success = event.grades?.offense?.situationalSuccess === true ||
+      event.result?.firstDown === true || event.result?.touchdown === true || event.result?.conversion === true;
+    const failure = event.grades?.offense?.situationalSuccess === false ||
+      (!success && Number(event.result?.yards) <= 0);
+    matches.push({success,failure,sameDrive});
+  }
+  if (matches[0]?.success) {
+    return {score:0,rawScore:0,failures:matches.filter(x=>x.failure).length,successes:matches.filter(x=>x.success).length,
+      reasons:['recent contextual result: latest comparable exact-play call succeeded; repetition remains viable']};
+  }
+  const failures = matches.filter(x=>x.failure).reduce((sum,row)=>sum+(row.sameDrive?1:0.6),0);
+  if (!(failures>0)) return {score:0,rawScore:0,failures:0,successes:matches.filter(x=>x.success).length,reasons:[]};
+  const rawScore=-Math.min(1.2,0.28+Math.max(0,failures-1)*0.24);
+  const score=sequenceAligned?rawScore*0.45:rawScore;
+  return {score:Number(score.toFixed(3)),rawScore:Number(rawScore.toFixed(3)),failures:Number(failures.toFixed(2)),
+    successes:matches.filter(x=>x.success).length,sequenceDiscount:sequenceAligned?0.45:1,
+    reasons:['recent contextual result: exact play recently failed in a similar context'+(sequenceAligned?'; sequence intent reduces the caution':'')]};
+}
+
 function usageSaturation(store, play, counter, situation) {
   const summary = store.summarizePlay(play.id);
   const attempts = Number(summary.attempts || 0);
@@ -97,8 +147,8 @@ function performanceScore(store, play, situation) {
     }
 
     if (situationSummary.attempts >= 2 && situationSummary.situationalSuccessRate === 0) {
-      components.recentFailureEscalation = -Math.min(3.0, 0.9 + (situationSummary.attempts - 2) * 0.8);
-      reasons.push("repeated same-situation failures trigger a strong shelf penalty");
+      components.recentFailureEscalation = -Math.min(1.5, 0.55 + (situationSummary.attempts - 2) * 0.35);
+      reasons.push("multiple same-situation failures add sample-backed caution without hard-banning the play");
     }
   } else {
     const usable = conceptSummaries.filter(x => x.attempts >= 2 && x.situationalSuccessRate != null);
@@ -163,7 +213,9 @@ class PlaySelectionEngine {
     // available incomplete-information profile. Once a fresh exact call is
     // available, that exact call becomes the dominant current structure.
     const defenseProfile = this.tendencies.recentDefensiveStructures(defensePlay || null);
-    const historicalStructureAvailable = !oracle && defenseProfile.sampleSize >= 2;
+    const historicalSampleSize = Number(defenseProfile.sampleSize || 0);
+    const historicalConfidenceWeight = !oracle ? historicalDefenseInfluence(historicalSampleSize) : 0;
+    const historicalStructureAvailable = !oracle && historicalSampleSize > 0;
 
     const evaluated = plays.map(originalPlay => {
       const normalizedProfile = this.offensiveProfiles?.profile
@@ -182,6 +234,7 @@ class PlaySelectionEngine {
       const intentPart = this.sequences?.candidateIntentFit
         ? this.sequences.candidateIntentFit(play, sequenceIntent, plays)
         : { aligned:false, tier:0 };
+      const contextualResult = recentContextualResult(events, play, situation, Boolean(intentPart.aligned));
       const selfScoutPart = !oracle && this.selfScout?.candidateValue
         ? this.selfScout.candidateValue(play)
         : { score:0, reason:null, scout:null };
@@ -227,12 +280,13 @@ class PlaySelectionEngine {
         historicalTendency: tendencyPart.score * 0.20,
         executionRepetition: executionRepetition * 0.35,
         recommendationRepetition: recommendationPenalty.score,
+        recentContextualResult: contextualResult.score,
         risk: riskPenalty,
         empiricalCoveragePrior: empiricalCoverage.available ? empiricalCoverage.score * 0.75 : 0,
       } : {
         // Stage 1 remains counter-first, but the counter evidence comes from
         // prior defensive structure rather than a not-yet-known exact call.
-        historicalStructureFit: historicalStructureAvailable ? counter.score * 0.55 : 0,
+        historicalStructureFit: historicalStructureAvailable ? counter.score * historicalConfidenceWeight : 0,
         situation: situationPart.score,
         historicalTendency: tendencyPart.score * 0.75,
         gameDayPerformance: performancePart.score,
@@ -244,15 +298,15 @@ class PlaySelectionEngine {
         driveObjectiveFit: objectivePart.score,
         hashGeometry: hashPart.score,
         selfScoutValue: selfScoutPart.score,
-        gameplanFit: strategyPart.components?.gameplanFit || 0,
-        callSheetMembership: strategyPart.components?.callSheetMembership || 0,
-        gameplanMixAccountability: strategyPart.components?.gameplanMixAccountability || 0,
+        gameplanFit: bounded(Number(strategyPart.components?.gameplanFit || 0), -0.30, 0.45),
+        callSheetMembership: 0,
+        gameplanMixAccountability: bounded(Number(strategyPart.components?.gameplanMixAccountability || 0), -0.35, 0.45),
         strategicSituation: strategyPart.components?.strategicSituation || 0,
         // Sequencing is an upstream intent layer. Legacy strategy components
         // remain visible in diagnostics below, but are intentionally not added
         // into the flat candidate total.
-        aggression: strategyPart.components?.aggression || 0,
-        audibleFlexibility: strategyPart.components?.audibleFlexibility || 0,
+        aggression: bounded(Number(strategyPart.components?.aggression || 0), -0.20, 0.20),
+        audibleFlexibility: bounded(Number(strategyPart.components?.audibleFlexibility || 0), 0, 0.15),
       };
 
       const total = Object.values(components).reduce((a,b) => a + b, 0);
@@ -272,6 +326,7 @@ class PlaySelectionEngine {
         ...performancePart.reasons,
         ...saturation.reasons,
         ...recommendationPenalty.reasons,
+        ...contextualResult.reasons,
         ...(empiricalSituation.available ? [`empirical situation prior ${empiricalSituation.rowId}: ${empiricalSituation.mode} edge ${empiricalSituation.score >= 0 ? '+' : ''}${empiricalSituation.score}`] : []),
         ...objectivePart.reasons.map(r => `drive objective: ${r}`),
         ...(hashPart.available && hashPart.reason ? [`hash geometry: ${hashPart.reason}`] : []),
@@ -309,6 +364,14 @@ class PlaySelectionEngine {
           performanceComponents: performancePart.components,
           usageSaturation: saturation,
           recommendationExposure: recommendationPenalty,
+          recentContextualResult: contextualResult,
+          historicalDefense: {
+            sampleSize: historicalSampleSize,
+            confidence: defenseProfile.confidence || 'VERY_LOW',
+            rawStructuralScore: Number(counter.score || 0),
+            appliedConfidenceWeight: historicalConfidenceWeight,
+            appliedContribution: Number((historicalStructureAvailable ? counter.score * historicalConfidenceWeight : 0).toFixed(3)),
+          },
           strategy: strategyPart,
           legacySequenceScoring: {
             appliedToTotal: false,
@@ -337,11 +400,10 @@ class PlaySelectionEngine {
     const situationValid = evaluated.filter(row => row.diagnostic.counter?.gate?.valid !== false);
     const counterValid = situationValid.filter(row => row.diagnostic.counter?.valid === true);
     let pool = situationValid;
-    if (oracle || historicalStructureAvailable) {
-      // Exact defense gets the full counter gate. Stage 1 uses the same gate
-      // when history supplies useful structural evidence, but degrades to the
-      // situation-valid set when the historical taxonomy cannot distinguish
-      // a viable answer.
+    if (oracle) {
+      // Fresh exact defense may hard-gate structural counters. Historical
+      // defense is confidence-weighted evidence only and never hard-gates
+      // Stage 1 from a tiny sample.
       pool = counterValid.length ? counterValid : situationValid;
     }
 
@@ -385,4 +447,4 @@ class PlaySelectionEngine {
   }
 }
 
-module.exports = { PlaySelectionEngine, performanceScore, recentRepetitionPenalty, usageSaturation };
+module.exports = { PlaySelectionEngine, performanceScore, recentRepetitionPenalty, usageSaturation, historicalDefenseInfluence, recentContextualResult };
