@@ -1,0 +1,2905 @@
+{
+ "metadata": {
+  "schemaVersion": 1,
+  "source": "EA playbook XML + PositionAssignmentDefine assets + compiled Frostbite offensive plays",
+  "generatedBy": "scripts/research/derive-assign-route-types.cjs",
+  "generatedAt": "2026-09-30T04:20:34.767Z",
+  "coordinateConvention": "Shared field frame: +x is the offense right. EA Lt/Rt is each unit's own perspective (offensive Lt at -x, defensive Lt at +x).",
+  "offensiveJoin": {
+   "knowledgePlays": 514,
+   "matchedPlays": 476,
+   "acceptedOrdinals": 90,
+   "rejectedOrdinals": {}
+  },
+  "enumOrder": {
+   "checked": 70,
+   "violations": [
+    {
+     "before": {
+      "ordinal": 93,
+      "name": "AssignRouteType_RR_WR_Screen"
+     },
+     "after": {
+      "ordinal": 94,
+      "name": "AssignRouteType_RR_RB_Screen_Left"
+     }
+    }
+   ]
+  },
+  "defensiveBlock": {
+   "afterOrdinal": 2,
+   "beforeOrdinal": 24,
+   "names": 20
+  },
+  "defensiveManBlock": [
+   133,
+   134,
+   135,
+   136,
+   137
+  ],
+  "validation": {
+   "failures": [],
+   "shiftedBlockFailureCounts": {
+    "1": 9,
+    "-1": 10
+   },
+   "passed": true
+  },
+  "unresolvedDefensiveOrdinals": [
+   {
+    "ordinal": 105,
+    "uses": 3031,
+    "samplePlays": [
+     "Return Left",
+     "Return Right",
+     "Return Middle"
+    ]
+   },
+   {
+    "ordinal": 107,
+    "uses": 796,
+    "samplePlays": [
+     "Return Left",
+     "Return Right",
+     "Return Middle"
+    ]
+   },
+   {
+    "ordinal": 108,
+    "uses": 318,
+    "samplePlays": [
+     "Return Left",
+     "Return Middle",
+     "Return Right"
+    ]
+   },
+   {
+    "ordinal": 139,
+    "uses": 515,
+    "samplePlays": [
+     "Base Onside",
+     "Hands Team",
+     "Onside XL"
+    ]
+   }
+  ]
+ },
+ "ordinals": {
+  "1": {
+   "name": "AssignRouteType_Block_Pass",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1323,
+   "purity": 0.971,
+   "assetFamily": {
+    "count": 318,
+    "samples": [
+     "Blocking/ALL_CutBlock_Screen",
+     "Blocking/ALL_Lead10for02_WRScreen_EmoryHenry",
+     "Blocking/ALL_Lead110for03_MiddleScreen",
+     "Blocking/ALL_Lead110for04_WRScreen_SlotBlockLt"
+    ]
+   }
+  },
+  "2": {
+   "name": "AssignRouteType_Block_Run",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1927,
+   "purity": 1,
+   "assetFamily": {
+    "count": 636,
+    "samples": [
+     "Blocking/ALL_CutBlock",
+     "Blocking/ALL_DrawRunBlock",
+     "Blocking/ALL_DrawRunBlockLong",
+     "Blocking/ALL_DrawRunBlockShort"
+    ]
+   }
+  },
+  "3": {
+   "name": "AssignRouteType_DefBlitz",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 5138,
+    "meanX": -0.93,
+    "meanY": 4.81,
+    "pctPosX": 0.404,
+    "pctNegX": 0.533,
+    "topPositionTypes": [
+     [
+      33,
+      869
+     ],
+     [
+      14,
+      752
+     ],
+     [
+      34,
+      721
+     ],
+     [
+      18,
+      598
+     ]
+    ],
+    "samplePlays": [
+     "Hot Blitz 3",
+     "Saw Blitz 1",
+     "Dbl Safety Blitz"
+    ]
+   },
+   "assetFamily": {
+    "count": 114,
+    "directories": {
+     "Defense": 1,
+     "DefenseRush": 31,
+     "DefensiveBack": 81,
+     "OverrideFormPos": 1
+    },
+    "samples": [
+     "Defense/OverrideFormPos_DBlitz_265for04_43Under_SS_Creep_Blitz_Gap_LeftC_(1)",
+     "DefenseRush/GAP_Left_A_34_MLB2_Blitz",
+     "DefenseRush/GAP_Left_A_34_MLB2_Blitz_Delay",
+     "DefenseRush/GAP_Left_A_LOLB_43Over_Blitz_SB25"
+    ],
+    "zones": [
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_RIGHT"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_CHASEBALL",
+     "ID_CURLFLATZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_DELAY",
+     "ID_INITIALMOVE",
+     "ID_OVERRIDEFORMPOS",
+     "ID_PASSRUSH",
+     "ID_SHOWBLITZ"
+    ]
+   }
+  },
+  "4": {
+   "name": "AssignRouteType_DefMan_Coverage",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 283,
+    "meanX": -0.21,
+    "meanY": 13.42,
+    "pctPosX": 0.488,
+    "pctNegX": 0.512,
+    "topPositionTypes": [
+     [
+      17,
+      148
+     ],
+     [
+      18,
+      135
+     ]
+    ],
+    "samplePlays": [
+     "1 Double WR1",
+     "Double Bracket",
+     "1 Double WR2"
+    ]
+   },
+   "assetFamily": {
+    "count": 9,
+    "directories": {
+     "DefenseMan": 9
+    },
+    "samples": [
+     "DefenseMan/Bracket_1_Double_SLWR1",
+     "DefenseMan/Bracket_1_Double_TE1",
+     "DefenseMan/Bracket_1_Double_WR1",
+     "DefenseMan/Bracket_1_Double_WR2"
+    ],
+    "zones": [
+     "ZONENUM_DEEP2A",
+     "ZONENUM_DEEP2B",
+     "ZONENUM_DEEP3B",
+     "ZONENUM_HOOK_MIDDLEREAD"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [
+     "MAN_DEEPEST"
+    ],
+    "opcodes": [
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_HOOKZONE",
+     "ID_MANCOVERAGE"
+    ]
+   }
+  },
+  "5": {
+   "name": "AssignRouteType_DefPass_Rush",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 32218,
+    "meanX": 0.09,
+    "meanY": 1.38,
+    "pctPosX": 0.447,
+    "pctNegX": 0.447,
+    "topPositionTypes": [
+     [
+      12,
+      9092
+     ],
+     [
+      32,
+      5383
+     ],
+     [
+      30,
+      3927
+     ],
+     [
+      29,
+      3493
+     ]
+    ],
+    "samplePlays": [
+     "Tampa 2",
+     "Cover 4 Quarters",
+     "Cover 2 Man"
+    ]
+   },
+   "assetFamily": {
+    "count": 124,
+    "directories": {
+     "Defense": 1,
+     "DefenseRush": 119,
+     "MiniGame": 3,
+     "OverrideFormPos": 1
+    },
+    "samples": [
+     "Defense/OverrideFormPos_DRush_GAP_Right_B_DL_RE",
+     "DefenseRush/170for03_250for02_LEStunt",
+     "DefenseRush/225for01",
+     "DefenseRush/230for01"
+    ],
+    "zones": [],
+    "strategies": [],
+    "coverMan": [],
+    "opcodes": [
+     "ID_CHASEBALL",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_DELAY",
+     "ID_INITIALMOVE",
+     "ID_MOVEDIRDIST",
+     "ID_OVERRIDEFORMPOS",
+     "ID_PASSRUSH",
+     "ID_SHOWBLITZ"
+    ]
+   }
+  },
+  "6": {
+   "name": "AssignRouteType_DefQB_Spy",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 256,
+    "meanX": -0.35,
+    "meanY": 5.05,
+    "pctPosX": 0.145,
+    "pctNegX": 0.336,
+    "topPositionTypes": [
+     [
+      14,
+      122
+     ],
+     [
+      33,
+      79
+     ],
+     [
+      31,
+      21
+     ],
+     [
+      15,
+      16
+     ]
+    ],
+    "samplePlays": [
+     "Cover 1 Contain",
+     "Safe Man Left",
+     "Safe Man Right"
+    ]
+   },
+   "assetFamily": {
+    "count": 2,
+    "directories": {
+     "DefenseZone": 2
+    },
+    "samples": [
+     "DefenseZone/QBSpy_10",
+     "DefenseZone/QBSpy_5"
+    ],
+    "zones": [],
+    "strategies": [],
+    "coverMan": [],
+    "opcodes": [
+     "ID_READANDBLITZ"
+    ]
+   }
+  },
+  "7": {
+   "name": "AssignRouteType_DefZone_Curl_Flat_Lt",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 250,
+    "meanX": 4.86,
+    "meanY": 11.17,
+    "pctPosX": 0.756,
+    "pctNegX": 0.244,
+    "topPositionTypes": [
+     [
+      18,
+      177
+     ],
+     [
+      17,
+      39
+     ],
+     [
+      16,
+      12
+     ],
+     [
+      14,
+      10
+     ]
+    ],
+    "samplePlays": [
+     "Cover 3 Sky",
+     "Cover 3 Match",
+     "Cover 3 Seam"
+    ]
+   },
+   "assetFamily": {
+    "count": 6,
+    "directories": {
+     "DefenseZone": 6
+    },
+    "samples": [
+     "DefenseZone/Profile_Curl_Flat_Right_43_SS_Creep",
+     "DefenseZone/Profile_Flat_Soft_Squat_Rt_Cover2Sink",
+     "DefenseZone/Profile_Seam_Flat_Left_34_FS_Creep",
+     "DefenseZone/Profile_Seam_Flat_Left_FS_Align_Tight"
+    ],
+    "zones": [
+     "ZONENUM_CURLTOFLAT_CURLFLAT_RIGHT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_LEFT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_RIGHT",
+     "ZONENUM_FLATZONE_SOFTSQUAT_RIGHT"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_CURLFLATZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_FLATZONE",
+     "ID_INITIALMOVE"
+    ]
+   }
+  },
+  "8": {
+   "name": "AssignRouteType_DefZone_Curl_Flat_Rt",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 785,
+    "meanX": -9.6,
+    "meanY": 5.04,
+    "pctPosX": 0.027,
+    "pctNegX": 0.967,
+    "topPositionTypes": [
+     [
+      34,
+      478
+     ],
+     [
+      18,
+      98
+     ],
+     [
+      16,
+      77
+     ],
+     [
+      15,
+      55
+     ]
+    ],
+    "samplePlays": [
+     "Cover 3 Match",
+     "Cover 3 Sky",
+     "Cover 3 Hard Flat"
+    ]
+   },
+   "assetFamily": {
+    "count": 13,
+    "directories": {
+     "DefenseZone": 12,
+     "DefensiveBack": 1
+    },
+    "samples": [
+     "DefenseZone/Profile_Curl_Flat_Left_Nicklel_Corner",
+     "DefenseZone/Profile_Curl_Flat_Left_ROLB_43",
+     "DefenseZone/Profile_Flat_Hard_Flat_Left_Dollar_Corner_Cover_3",
+     "DefenseZone/Profile_Flat_Hard_Flat_Left_Nicklel_Corner"
+    ],
+    "zones": [
+     "ZONENUM_CURLTOFLAT_CURLFLAT_LEFT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_LEFT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_RIGHT",
+     "ZONENUM_FLATZONE_HARDFLAT_LEFT",
+     "ZONENUM_FLATZONE_HARDFLAT_RIGHT",
+     "ZONENUM_FLATZONE_SOFTSQUAT_LEFT"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_CHASEBALL",
+     "ID_CURLFLATZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_FLATZONE",
+     "ID_PASSRUSH",
+     "ID_SHOWBLITZ"
+    ]
+   }
+  },
+  "9": {
+   "name": "AssignRouteType_DefZone_Deep_2_Lt_Half",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 2098,
+    "meanX": 6.28,
+    "meanY": 12.12,
+    "pctPosX": 0.807,
+    "pctNegX": 0.171,
+    "topPositionTypes": [
+     [
+      18,
+      1257
+     ],
+     [
+      17,
+      505
+     ],
+     [
+      16,
+      336
+     ]
+    ],
+    "samplePlays": [
+     "Tampa 2",
+     "Cover 2 Man",
+     "Cover 6"
+    ]
+   },
+   "assetFamily": {
+    "count": 19,
+    "directories": {
+     "DefenseZone": 19
+    },
+    "samples": [
+     "DefenseZone/Deep2_LtHalf",
+     "DefenseZone/Deep2_LtHalf_44_CB",
+     "DefenseZone/Deep2_LtHalf_Bail_155_SS",
+     "DefenseZone/Deep2_LtHalf_Bail_155_SS_(2)"
+    ],
+    "zones": [
+     "ZONENUM_DEEP2A",
+     "ZONENUM_DEEP2B",
+     "ZONENUM_DEEP3C",
+     "ZONENUM_FLATZONE_CLOUD_RIGHT"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_FLATZONE",
+     "ID_OVERRIDEFORMPOS"
+    ]
+   }
+  },
+  "10": {
+   "name": "AssignRouteType_DefZone_Deep_2_Rt_Half",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 1326,
+    "meanX": -8.33,
+    "meanY": 12.28,
+    "pctPosX": 0.008,
+    "pctNegX": 0.969,
+    "topPositionTypes": [
+     [
+      17,
+      1024
+     ],
+     [
+      18,
+      155
+     ],
+     [
+      16,
+      106
+     ],
+     [
+      34,
+      33
+     ]
+    ],
+    "samplePlays": [
+     "Tampa 2",
+     "Cover 2 Man",
+     "Cover 6"
+    ]
+   },
+   "assetFamily": {
+    "count": 12,
+    "directories": {
+     "DefenseZone": 12
+    },
+    "samples": [
+     "DefenseZone/Deep2_RtHalf",
+     "DefenseZone/Deep2_RtHalf_425_Under_FS",
+     "DefenseZone/Deep2_RtHalf_44_RCB",
+     "DefenseZone/Deep2_RtHalf_Bail_155_CB3"
+    ],
+    "zones": [
+     "ZONENUM_DEEP2A",
+     "ZONENUM_DEEP3B"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_OVERRIDEFORMPOS"
+    ]
+   }
+  },
+  "11": {
+   "name": "AssignRouteType_DefZone_Deep_4_In_Lt_Qtr",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 835,
+    "meanX": 8.09,
+    "meanY": 13.5,
+    "pctPosX": 0.998,
+    "pctNegX": 0,
+    "topPositionTypes": [
+     [
+      18,
+      748
+     ],
+     [
+      17,
+      87
+     ]
+    ],
+    "samplePlays": [
+     "Cover 4 Quarters",
+     "Cover 4 Palms",
+     "Cover 4 Drop"
+    ]
+   },
+   "assetFamily": {
+    "count": 7,
+    "directories": {
+     "DefenseZone": 7
+    },
+    "samples": [
+     "DefenseZone/Deep4_InLtQtr",
+     "DefenseZone/Deep4_InLtQtr_No_Align",
+     "DefenseZone/Deep4_InLtQtr_Palms",
+     "DefenseZone/Deep4_InLtQtr_Palms_No_Align"
+    ],
+    "zones": [
+     "ZONENUM_DEEP4C"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_OVERRIDEFORMPOS"
+    ]
+   }
+  },
+  "12": {
+   "name": "AssignRouteType_DefZone_Deep_4_In_Rt_Qtr",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 1000,
+    "meanX": -8.09,
+    "meanY": 13.63,
+    "pctPosX": 0,
+    "pctNegX": 0.993,
+    "topPositionTypes": [
+     [
+      17,
+      929
+     ],
+     [
+      18,
+      71
+     ]
+    ],
+    "samplePlays": [
+     "Cover 4 Quarters",
+     "Cover 6",
+     "Cover 4 Palms"
+    ]
+   },
+   "assetFamily": {
+    "count": 7,
+    "directories": {
+     "DefenseZone": 7
+    },
+    "samples": [
+     "DefenseZone/Deep4_InRtQtr",
+     "DefenseZone/Deep4_InRtQtr_No_Align",
+     "DefenseZone/Deep4_InRtQtr_Palms",
+     "DefenseZone/Deep4_InRtQtr_Palms_No_Align"
+    ],
+    "zones": [
+     "ZONENUM_DEEP4B"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_OVERRIDEFORMPOS"
+    ]
+   }
+  },
+  "13": {
+   "name": "AssignRouteType_DefZone_Deep_4_Out_Lt_Qtr",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 833,
+    "meanX": 16.96,
+    "meanY": 7.76,
+    "pctPosX": 1,
+    "pctNegX": 0,
+    "topPositionTypes": [
+     [
+      16,
+      833
+     ]
+    ],
+    "samplePlays": [
+     "Cover 4 Quarters",
+     "Cover 4 Palms",
+     "Cover 4 Drop"
+    ]
+   },
+   "assetFamily": {
+    "count": 8,
+    "directories": {
+     "DefenseZone": 8
+    },
+    "samples": [
+     "DefenseZone/Deep4_OutLtQtr",
+     "DefenseZone/Deep4_OutLtQtr_Bail_LCB",
+     "DefenseZone/Deep4_OutLtQtr_LCB_Palms",
+     "DefenseZone/Deep4_OutLtQtr_LCB_Palms_Show_2"
+    ],
+    "zones": [
+     "ZONENUM_DEEP4D"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_OVERRIDEFORMPOS"
+    ]
+   }
+  },
+  "14": {
+   "name": "AssignRouteType_DefZone_Deep_4_Out_Rt_Qtr",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 1000,
+    "meanX": -17.1,
+    "meanY": 7.77,
+    "pctPosX": 0,
+    "pctNegX": 0.999,
+    "topPositionTypes": [
+     [
+      16,
+      1000
+     ]
+    ],
+    "samplePlays": [
+     "Cover 4 Quarters",
+     "Cover 6",
+     "Cover 4 Palms"
+    ]
+   },
+   "assetFamily": {
+    "count": 8,
+    "directories": {
+     "DefenseZone": 8
+    },
+    "samples": [
+     "DefenseZone/Deep4_OutRtQtr",
+     "DefenseZone/Deep4_OutRtQtr_Bail_RCB",
+     "DefenseZone/Deep4_OutRtQtr_Prevent",
+     "DefenseZone/Deep4_OutRtQtr_RCB_Palms"
+    ],
+    "zones": [
+     "ZONENUM_DEEP4A"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_OVERRIDEFORMPOS"
+    ]
+   }
+  },
+  "15": {
+   "name": "AssignRouteType_DefZone_Deep_Lt_3rd",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 2363,
+    "meanX": 16.13,
+    "meanY": 8.63,
+    "pctPosX": 1,
+    "pctNegX": 0,
+    "topPositionTypes": [
+     [
+      16,
+      2109
+     ],
+     [
+      18,
+      243
+     ],
+     [
+      17,
+      11
+     ]
+    ],
+    "samplePlays": [
+     "Cover 3 Match",
+     "Cover 3 Sky",
+     "Hot Blitz 3"
+    ]
+   },
+   "assetFamily": {
+    "count": 9,
+    "directories": {
+     "DefenseZone": 9
+    },
+    "samples": [
+     "DefenseZone/Deep3_Lt3rd",
+     "DefenseZone/Deep3_Lt3rd_Bail",
+     "DefenseZone/Deep3_Lt3rd_LCB_Press",
+     "DefenseZone/Deep3_Lt3rd_LCB_Press_(1)"
+    ],
+    "zones": [
+     "ZONENUM_DEEP3B",
+     "ZONENUM_DEEP3C"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT"
+    ]
+   }
+  },
+  "16": {
+   "name": "AssignRouteType_DefZone_Deep_Mid_3rd",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 3552,
+    "meanX": -2.76,
+    "meanY": 13.37,
+    "pctPosX": 0.259,
+    "pctNegX": 0.608,
+    "topPositionTypes": [
+     [
+      17,
+      2650
+     ],
+     [
+      18,
+      890
+     ],
+     [
+      31,
+      8
+     ],
+     [
+      33,
+      3
+     ]
+    ],
+    "samplePlays": [
+     "Cover 3 Match",
+     "Cover 3 Sky",
+     "Cover 1 Hole"
+    ]
+   },
+   "assetFamily": {
+    "count": 17,
+    "directories": {
+     "DefenseZone": 17
+    },
+    "samples": [
+     "DefenseZone/Deep3_Mid3rd",
+     "DefenseZone/Deep3_Mid3rd_326_SS_BailMid_FakeBlitz",
+     "DefenseZone/Deep3_Mid3rd_34_FS_BailMid",
+     "DefenseZone/Deep3_Mid3rd_34_FS_BailMid_(1)"
+    ],
+    "zones": [
+     "ZONENUM_DEEP3A",
+     "ZONENUM_DEEP3B"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_OVERRIDEFORMPOS"
+    ]
+   }
+  },
+  "17": {
+   "name": "AssignRouteType_DefZone_Deep_Rt_3rd",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 2361,
+    "meanX": -16.66,
+    "meanY": 8.3,
+    "pctPosX": 0,
+    "pctNegX": 1,
+    "topPositionTypes": [
+     [
+      16,
+      2245
+     ],
+     [
+      17,
+      102
+     ],
+     [
+      18,
+      14
+     ]
+    ],
+    "samplePlays": [
+     "Cover 3 Match",
+     "Cover 3 Sky",
+     "Hot Blitz 3"
+    ]
+   },
+   "assetFamily": {
+    "count": 9,
+    "directories": {
+     "DefenseZone": 8,
+     "MiniGame": 1
+    },
+    "samples": [
+     "DefenseZone/Deep3_Rt3rd",
+     "DefenseZone/Deep3_Rt3rd_Bail",
+     "DefenseZone/Deep3_Rt3rd_FS",
+     "DefenseZone/Deep3_Rt3rd_FS_Qtr_3_Deep"
+    ],
+    "zones": [
+     "ZONENUM_DEEP3A",
+     "ZONENUM_DEEP3C"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DELAY"
+    ]
+   }
+  },
+  "18": {
+   "name": "AssignRouteType_DefZone_Flat_Lt",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 1883,
+    "meanX": 7.29,
+    "meanY": 4.69,
+    "pctPosX": 0.971,
+    "pctNegX": 0.028,
+    "topPositionTypes": [
+     [
+      18,
+      341
+     ],
+     [
+      33,
+      274
+     ],
+     [
+      16,
+      267
+     ],
+     [
+      13,
+      254
+     ]
+    ],
+    "samplePlays": [
+     "Cover 4 Quarters",
+     "Cover 4 Palms",
+     "Cover 3 Sky"
+    ]
+   },
+   "assetFamily": {
+    "count": 37,
+    "directories": {
+     "DefenseZone": 37
+    },
+    "samples": [
+     "DefenseZone/Flat_Lt_Spy1_FakeBail",
+     "DefenseZone/Flat_Lt_Spy1_SS_Creep_(1)",
+     "DefenseZone/Flat_Lt_Spy2_LOLB_46_Bear_Under",
+     "DefenseZone/Profile_Curl_Flat_Right"
+    ],
+    "zones": [
+     "ZONENUM_CURLTOFLAT_CURLFLAT_RIGHT",
+     "ZONENUM_CURLTOFLAT_QUARTERSFLAT_RIGHT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_RIGHT",
+     "ZONENUM_FLATZONE_CLOUD_RIGHT",
+     "ZONENUM_FLATZONE_HARDFLAT_LEFT",
+     "ZONENUM_FLATZONE_HARDFLAT_RIGHT",
+     "ZONENUM_FLATZONE_SOFTSQUAT_RIGHT",
+     "ZONENUM_UNDERNEATHZONE_FIRST"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_CURLFLATZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_FLATZONE",
+     "ID_INITIALMOVE"
+    ]
+   }
+  },
+  "19": {
+   "name": "AssignRouteType_DefZone_Flat_Rt",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 3152,
+    "meanX": -10.31,
+    "meanY": 6.19,
+    "pctPosX": 0.059,
+    "pctNegX": 0.941,
+    "topPositionTypes": [
+     [
+      16,
+      1288
+     ],
+     [
+      34,
+      717
+     ],
+     [
+      17,
+      332
+     ],
+     [
+      18,
+      221
+     ]
+    ],
+    "samplePlays": [
+     "Tampa 2",
+     "Cover 4 Quarters",
+     "Cover 6"
+    ]
+   },
+   "assetFamily": {
+    "count": 49,
+    "directories": {
+     "DefenseZone": 49
+    },
+    "samples": [
+     "DefenseZone/Flat_Rt_Spy5_43_ROLB_FakeBlitz",
+     "DefenseZone/Flat_Rt_Spy5_FakeBail",
+     "DefenseZone/Flat_Rt_Spy5_FS_Creep_(1)",
+     "DefenseZone/Profile_Curl_Flat_Left"
+    ],
+    "zones": [
+     "ZONENUM_CURLTOFLAT_CURLFLAT_LEFT",
+     "ZONENUM_CURLTOFLAT_CURLFLAT_RIGHT",
+     "ZONENUM_CURLTOFLAT_QUARTERSFLAT_LEFT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_LEFT",
+     "ZONENUM_DEEP2A",
+     "ZONENUM_FLATZONE_HARDFLAT_LEFT",
+     "ZONENUM_FLATZONE_HARDFLAT_RIGHT",
+     "ZONENUM_FLATZONE_SOFTSQUAT_LEFT",
+     "ZONENUM_HOOK_HOOKCURL_LEFT",
+     "ZONENUM_UNDERNEATHZONE_FIRST"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default",
+     "ZoneStrategy_UltraConservative"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_CURLFLATZONE",
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_FLATZONE",
+     "ID_HOOKZONE",
+     "ID_INITIALMOVE",
+     "ID_SHOWBLITZ"
+    ]
+   }
+  },
+  "20": {
+   "name": "AssignRouteType_DefZone_Hook_Lt",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 4226,
+    "meanX": 2.71,
+    "meanY": 6.66,
+    "pctPosX": 0.768,
+    "pctNegX": 0.201,
+    "topPositionTypes": [
+     [
+      18,
+      1172
+     ],
+     [
+      33,
+      1032
+     ],
+     [
+      14,
+      429
+     ],
+     [
+      15,
+      295
+     ]
+    ],
+    "samplePlays": [
+     "Tampa 2",
+     "Cover 3 Match",
+     "Cover 2 Invert"
+    ]
+   },
+   "assetFamily": {
+    "count": 92,
+    "directories": {
+     "DefenseZone": 92
+    },
+    "samples": [
+     "DefenseZone/Hook_Spy2_D30_No_Align_Dollar_MB",
+     "DefenseZone/Hook_Spy2_D40_Quarters_3_Deep",
+     "DefenseZone/Hook_Spy2_D65_CB4_Quarter_3_Deep",
+     "DefenseZone/Hook_Spy3_D55_MLB1_46_Bear_Under"
+    ],
+    "zones": [
+     "ZONENUM_CURLTOFLAT_CURLFLAT_RIGHT",
+     "ZONENUM_CURLTOFLAT_QUARTERSFLAT_RIGHT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_LEFT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_RIGHT",
+     "ZONENUM_FLATZONE_CLOUD_RIGHT",
+     "ZONENUM_FLATZONE_HARDFLAT_RIGHT",
+     "ZONENUM_FLATZONE_SOFTSQUAT_RIGHT",
+     "ZONENUM_HOOK_3RECHOOK",
+     "ZONENUM_HOOK_CURL_LEFT",
+     "ZONENUM_HOOK_HOOKCURL_LEFT",
+     "ZONENUM_HOOK_HOOKCURL_RIGHT",
+     "ZONENUM_HOOK_MIDDLEREAD",
+     "ZONENUM_HOOK_VERTICALHOOK_LEFT",
+     "ZONENUM_HOOK_VERTICALHOOK_RIGHT",
+     "ZONENUM_UNDERNEATHZONE_FIRST",
+     "ZONENUM_UNDERNEATHZONE_LAST"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_CURLFLATZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_FLATZONE",
+     "ID_HOOKZONE",
+     "ID_INITIALMOVE",
+     "ID_OVERRIDEFORMPOS",
+     "ID_SHOWBLITZ"
+    ]
+   }
+  },
+  "21": {
+   "name": "AssignRouteType_DefZone_Hook_Mid",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 4230,
+    "meanX": -0.25,
+    "meanY": 4.88,
+    "pctPosX": 0.333,
+    "pctNegX": 0.447,
+    "topPositionTypes": [
+     [
+      33,
+      2015
+     ],
+     [
+      14,
+      817
+     ],
+     [
+      31,
+      317
+     ],
+     [
+      34,
+      292
+     ]
+    ],
+    "samplePlays": [
+     "Tampa 2",
+     "Cover 4 Quarters",
+     "Cover 6"
+    ]
+   },
+   "assetFamily": {
+    "count": 60,
+    "directories": {
+     "Defense": 2,
+     "DefenseZone": 58
+    },
+    "samples": [
+     "Defense/Override_DZone_Hook_Spy1_D90_SS_Nickel",
+     "Defense/Override_DZone_Hook_Spy1_D90_SS_Nickel_Cloud",
+     "DefenseZone/Hook_Spy2_D90_LOLB_34_Over_Ed",
+     "DefenseZone/Hook_Spy3_D270_FS_Short"
+    ],
+    "zones": [
+     "ZONENUM_CURLTOFLAT_CURLFLAT_RIGHT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_RIGHT",
+     "ZONENUM_FLATZONE_CLOUD_RIGHT",
+     "ZONENUM_FLATZONE_SOFTSQUAT_RIGHT",
+     "ZONENUM_HOOK_3RECHOOK",
+     "ZONENUM_HOOK_CURL_LEFT",
+     "ZONENUM_HOOK_HOOKCURL_LEFT",
+     "ZONENUM_HOOK_HOOKCURL_RIGHT",
+     "ZONENUM_HOOK_MIDDLEREAD",
+     "ZONENUM_HOOK_VERTICALHOOK_LEFT",
+     "ZONENUM_HOOK_VERTICALHOOK_RIGHT",
+     "ZONENUM_UNDERNEATHZONE_LAST"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_CURLFLATZONE",
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_DELAY",
+     "ID_FLATZONE",
+     "ID_HOOKZONE",
+     "ID_INITIALMOVE",
+     "ID_OVERRIDEFORMPOS",
+     "ID_SHOWBLITZ"
+    ]
+   }
+  },
+  "22": {
+   "name": "AssignRouteType_DefZone_Hook_Rt",
+   "evidence": "DEFENSIVE_ENUM_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 3980,
+    "meanX": 2.05,
+    "meanY": 6.08,
+    "pctPosX": 0.398,
+    "pctNegX": 0.538,
+    "topPositionTypes": [
+     [
+      16,
+      996
+     ],
+     [
+      33,
+      966
+     ],
+     [
+      15,
+      552
+     ],
+     [
+      18,
+      408
+     ]
+    ],
+    "samplePlays": [
+     "Tampa 2",
+     "Cover 6",
+     "Cover 1 Robber Press"
+    ]
+   },
+   "assetFamily": {
+    "count": 76,
+    "directories": {
+     "DefenseZone": 76
+    },
+    "samples": [
+     "DefenseZone/Hook_Spy3_D125_No_Align",
+     "DefenseZone/Hook_Spy4_D115_CB3_Quarter_3_Deep_(1)",
+     "DefenseZone/Hook_Spy4_D125_SB100_MLB2_Dime_1-4-6",
+     "DefenseZone/Hook_Spy4_D140_Quarters_3_Deep"
+    ],
+    "zones": [
+     "ZONENUM_CURLTOFLAT_CURLFLAT_LEFT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_LEFT",
+     "ZONENUM_CURLTOFLAT_SEAMFLAT_RIGHT",
+     "ZONENUM_DEEP3A",
+     "ZONENUM_DEEP3C",
+     "ZONENUM_FLATZONE_CLOUD_RIGHT",
+     "ZONENUM_FLATZONE_SOFTSQUAT_RIGHT",
+     "ZONENUM_HOOK_3RECHOOK",
+     "ZONENUM_HOOK_CURL_LEFT",
+     "ZONENUM_HOOK_HOOKCURL_LEFT",
+     "ZONENUM_HOOK_MIDDLEREAD",
+     "ZONENUM_HOOK_VERTICALHOOK_LEFT",
+     "ZONENUM_UNDERNEATHZONE_FIRST"
+    ],
+    "strategies": [
+     "ZoneStrategy_Default"
+    ],
+    "coverMan": [],
+    "opcodes": [
+     "ID_CURLFLATZONE",
+     "ID_DEEPZONE",
+     "ID_DEFALIGNMENT",
+     "ID_FLATZONE",
+     "ID_HOOKZONE",
+     "ID_INITIALMOVE",
+     "ID_OVERRIDEFORMPOS",
+     "ID_SHOWBLITZ"
+    ]
+   }
+  },
+  "24": {
+   "name": "AssignRouteType_K_FG",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 2,
+   "purity": 1,
+   "assetFamily": {
+    "count": 1,
+    "samples": [
+     "Kicker/FGKick"
+    ]
+   }
+  },
+  "25": {
+   "name": "AssignRouteType_K_FG_Fake",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 3,
+   "purity": 1,
+   "assetFamily": {
+    "count": 3,
+    "samples": [
+     "Kicker/FGKickFake_PRECAN_FLIP_KICKER",
+     "Kicker/FGKickFake_PRECAN_HOLDER_ROLLOUT_FROM__KICKER",
+     "Kicker/FGKickFake_PRECAN_SHOVEL_PASS_BACKSIDE"
+    ]
+   }
+  },
+  "26": {
+   "name": "AssignRouteType_K_Kickoff",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 6,
+   "purity": 1,
+   "assetFamily": {
+    "count": 3,
+    "samples": [
+     "Kicker/Kickoff",
+     "Kicker/Kickoff_Safety",
+     "Kicker/LandingZone_Kickoff"
+    ]
+   }
+  },
+  "27": {
+   "name": "AssignRouteType_K_Onside_Kick",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 2,
+   "purity": 1,
+   "assetFamily": {
+    "count": 1,
+    "samples": [
+     "Kicker/Kickoff_Onside"
+    ]
+   }
+  },
+  "28": {
+   "name": "AssignRouteType_K_Squib_Kick",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 1,
+    "samples": [
+     "Kicker/Kickoff_Squib"
+    ]
+   }
+  },
+  "29": {
+   "name": "AssignRouteType_P_Punt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 4,
+   "purity": 1,
+   "assetFamily": {
+    "count": 1,
+    "samples": [
+     "Punter/Punt"
+    ]
+   }
+  },
+  "30": {
+   "name": "AssignRouteType_P_Punt_Fake_Pass",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 2,
+   "purity": 1,
+   "assetFamily": {
+    "count": 2,
+    "samples": [
+     "Punter/PuntFake_Direct_Snap_Pass_Precan_6",
+     "Punter/PuntFake_PassShovel"
+    ]
+   }
+  },
+  "31": {
+   "name": "AssignRouteType_P_Punt_Fake_Run",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 1,
+    "samples": [
+     "Punter/PuntFake_Run_Backside"
+    ]
+   }
+  },
+  "32": {
+   "name": "AssignRouteType_QB_Draw",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 7,
+    "samples": [
+     "Quarterback/BlastPowerRt_QB",
+     "Quarterback/BlastPower_Foward_MoveDir",
+     "Quarterback/BlastSweepPowerRt_QB",
+     "Quarterback/Draw_0"
+    ]
+   }
+  },
+  "33": {
+   "name": "AssignRouteType_QB_Fake_FG_Pitch",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 2,
+   "purity": 1,
+   "assetFamily": {
+    "count": 2,
+    "samples": [
+     "Quarterback/FGSpotFake_Pitch_Kicker_overshoulder",
+     "Quarterback/FGSpotFake_Shovel_Backside"
+    ]
+   }
+  },
+  "35": {
+   "name": "AssignRouteType_QB_Fake_Spike",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 3,
+   "purity": 1,
+   "assetFamily": {
+    "count": 3,
+    "samples": [
+     "Quarterback/FakeStopClock_1_Step",
+     "Quarterback/FakeStopClock_3_Step",
+     "Quarterback/FakeStopClock_5_Step"
+    ]
+   }
+  },
+  "36": {
+   "name": "AssignRouteType_QB_FG_Fake_Pass",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 2,
+   "purity": 1,
+   "assetFamily": {
+    "count": 2,
+    "samples": [
+     "Kicker/FGKickFake_PRECAN_FLIP_KICKER_PASS",
+     "Quarterback/FGSpotFake_Pass"
+    ]
+   }
+  },
+  "37": {
+   "name": "AssignRouteType_QB_FG_Hold",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 3,
+   "purity": 1,
+   "assetFamily": {
+    "count": 1,
+    "samples": [
+     "Quarterback/FGSpot"
+    ]
+   }
+  },
+  "38": {
+   "name": "AssignRouteType_QB_Kneel",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 1,
+    "samples": [
+     "Quarterback/Kneel"
+    ]
+   }
+  },
+  "40": {
+   "name": "AssignRouteType_QB_Pass",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 160,
+   "purity": 1,
+   "assetFamily": {
+    "count": 56,
+    "samples": [
+     "MiniGame/Delay_10_Chase",
+     "MiniGame/Delay_15_Chase",
+     "MiniGame/Delay_1_Chase",
+     "MiniGame/Delay_20_Chase"
+    ]
+   }
+  },
+  "41": {
+   "name": "AssignRouteType_QB_Play_Action",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 104,
+   "purity": 1,
+   "assetFamily": {
+    "count": 124,
+    "samples": [
+     "Precan/QB_Near_FB_DiveRt_Dropback_PA_Precan_118_117_NEW27",
+     "Precan/QB_Option_Pistol_Left_PA_Pass_P2_PistolWeak_M2",
+     "Precan/QB_PISTOL_00_PA_DropBack_Precan_2_4",
+     "Precan/QB_Pistol_00_PA_ReadOptionRt_Pass_Precan_145_146"
+    ]
+   }
+  },
+  "43": {
+   "name": "AssignRouteType_QB_Shotgun_Read_Option",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 3,
+   "purity": 1,
+   "assetFamily": {
+    "count": 54,
+    "samples": [
+     "Precan/Automotion_Shift_HBatQB_Shotgun_HB_FrontLeft_Inverted_Veer",
+     "Precan/QB_OPTION_PISTOL_HB2onRight_TripleOptionRt_PitchMan1",
+     "Precan/QB_OPTION_PISTOL_HB2onRight_TripleOptionRt_PitchMan5",
+     "Precan/QB_Option_Pistol_Strong_TripleOption_PitchMan2"
+    ]
+   }
+  },
+  "45": {
+   "name": "AssignRouteType_QB_Spike",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 1,
+    "samples": [
+     "Quarterback/StopClock"
+    ]
+   }
+  },
+  "47": {
+   "name": "AssignRouteType_RB_Counter",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 42,
+   "purity": 1,
+   "assetFamily": {
+    "count": 41,
+    "samples": [
+     "Fullback/Flexbone_Counter_Option_2P_LT",
+     "Fullback/Flexbone_H0_Backstep_Hand_FBTrap_Precan_75_76",
+     "Fullback/Wishbone_H0_Backstep_Hand_FBTrap_Wishbone_Precan_152_153",
+     "Halfback/Automotion_Reload_SG_DeepOffsetLt_CounterRt_Precan_220_160"
+    ]
+   }
+  },
+  "48": {
+   "name": "AssignRouteType_RB_Dive",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 23,
+   "purity": 1,
+   "assetFamily": {
+    "count": 43,
+    "samples": [
+     "Fullback/Flexbone_FB_Trap_LT_Precan_37_38",
+     "Fullback/Flexbone_H0_FBTrapRt_Precan_165_162",
+     "Fullback/Flexbone_H0_FBTrapRt_Precan_38_37",
+     "Fullback/Flexbone_Receive_Dive_2P_Precan_194_195"
+    ]
+   }
+  },
+  "49": {
+   "name": "AssignRouteType_RB_Draw",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 6,
+   "purity": 1,
+   "assetFamily": {
+    "count": 16,
+    "samples": [
+     "Fullback/SG2RB_EvenRt_InsideZone_Precan_27_4",
+     "Fullback/SG2RB_H4_Shuffle_Hand",
+     "Fullback/SG2RB_H4_Shuffle_Hand_FBBehind_RPO",
+     "Fullback/SG2RB_H4_Shuffle_Hand_Pistol"
+    ]
+   }
+  },
+  "52": {
+   "name": "AssignRouteType_RB_Fake_Punt_Run",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 1,
+    "samples": [
+     "Halfback/ShovelPass_RBonRight"
+    ]
+   }
+  },
+  "54": {
+   "name": "AssignRouteType_RB_Option_Receive",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 2,
+   "purity": 1,
+   "assetFamily": {
+    "count": 77,
+    "samples": [
+     "Fullback/Flexbone_2P_Load_Option_RT",
+     "Fullback/Flexbone_Inside_Veer_Tr_Option_Lt_Precan_145_144",
+     "Fullback/Flexbone_Inside_Veer_Tr_Option_Precan_144_145",
+     "Fullback/Flexbone_Midline_Triple_2P_LT_Precan_199_198"
+    ]
+   }
+  },
+  "55": {
+   "name": "AssignRouteType_RB_Pass",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 1,
+    "samples": [
+     "Trick/HB_SB_PitchRt_HB_Pass"
+    ]
+   }
+  },
+  "56": {
+   "name": "AssignRouteType_RB_Slam",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 63,
+   "purity": 0.984,
+   "assetFamily": {
+    "count": 93,
+    "samples": [
+     "Fullback/IForm_H2_Hand_FBDive_Rt_New26_Precan_118_117",
+     "Fullback/IForm_H2_Hand__New_InitialAnim_FB",
+     "Fullback/IForm_H2_Hand__New_InitialAnim_FB_Trap_TEST26_Precan_120_119",
+     "Fullback/SG2RB_BehindRt_InsideZoneLt_Precan_117_138"
+    ]
+   }
+  },
+  "57": {
+   "name": "AssignRouteType_RB_Stretch",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 26,
+   "purity": 1,
+   "assetFamily": {
+    "count": 28,
+    "samples": [
+     "Halfback/Automotion_Shift_QBatHB_SG_H6_Backstep_Hand",
+     "Halfback/Pistol_Weak_HB2_OutsideZoneRt",
+     "Halfback/Reload_SG_H6_Backstep_Hand",
+     "Halfback/SB_H4_Backstep_Hand_Precan_113_111"
+    ]
+   }
+  },
+  "58": {
+   "name": "AssignRouteType_RB_Sweep",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 18,
+   "purity": 0.944,
+   "assetFamily": {
+    "count": 80,
+    "samples": [
+     "Fullback/Flexbone_Receive_Toss_Lt_Precan_89_80",
+     "Fullback/Flexbone_Receive_Toss_Rt_Precan_80_89",
+     "Halfback/ALL_Delay_PitchLt_180_FBFake_HBtoss_(trick)",
+     "Halfback/ALL_Delay_PitchLt_180_FBFake_HBtoss_(trick)_Precan_184_183"
+    ]
+   }
+  },
+  "60": {
+   "name": "AssignRouteType_RR_Clown",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 8,
+    "samples": [
+     "RunRoute/WR_AutoMotion_X-5_TE_CoPo_Rt",
+     "RunRoute/WR_Run45for03_Run90for07_Run45for15_XClownRt",
+     "RunRoute/WR_Run45for03_Run90for10_Run45for15_PoCoLt_Deeper",
+     "RunRoute/WR_Run45for03_Run90for10_Run45for15_PoCoLt_DeeperShot"
+    ]
+   }
+  },
+  "61": {
+   "name": "AssignRouteType_RR_Comeback",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 29,
+   "purity": 1,
+   "assetFamily": {
+    "count": 27,
+    "samples": [
+     "HotRoute/ComebackLt",
+     "HotRoute/ComebackRt",
+     "OverrideFormPos/OFP_Z_OnBall_ComebackRT",
+     "RunRoute/Automotion_WR_MotionLt_ComebackLt_X-9.5"
+    ]
+   }
+  },
+  "62": {
+   "name": "AssignRouteType_RR_Corner_Deep",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 28,
+   "purity": 0.929,
+   "assetFamily": {
+    "count": 35,
+    "samples": [
+     "HotRoute/MUTRBCorner_Left",
+     "HotRoute/MUTRBCorner_Right",
+     "HotRoute/MUTSlotCorner_Left",
+     "HotRoute/MUTSlotCorner_Right"
+    ]
+   }
+  },
+  "63": {
+   "name": "AssignRouteType_RR_Corner_Middle",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 35,
+   "purity": 1,
+   "assetFamily": {
+    "count": 62,
+    "samples": [
+     "HotRoute/MUTTECorner_Left",
+     "HotRoute/MUTTECorner_Right",
+     "OptionRoute/WR_Option_Corner_Lt_Flatten",
+     "OptionRoute/WR_Option_Corner_Rt_Flatten"
+    ]
+   }
+  },
+  "64": {
+   "name": "AssignRouteType_RR_Corner_Post",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 5,
+   "purity": 1,
+   "assetFamily": {
+    "count": 14,
+    "samples": [
+     "RunRoute/WR_Delay.2_Run90for10_CutR45_Run45for02_CutL90_Run135for20",
+     "RunRoute/WR_Run80for10_CutR45_Run45for03_CutL90_Run135for15_PostCornerLt",
+     "RunRoute/WR_Run90for01_CutR45_Run45for03_CutL90_Run135for15",
+     "RunRoute/WR_Run90for03_CutR45_Run45for03_CutL90_Run135for15"
+    ]
+   }
+  },
+  "65": {
+   "name": "AssignRouteType_RR_Corner_Stop",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 4,
+   "purity": 1,
+   "assetFamily": {
+    "count": 6,
+    "samples": [
+     "RunRoute/WR_Run90for08_Run65for30_Swirl_CornerStopRt",
+     "RunRoute/WR_Run90for08_Run65for30_Swirl_CornerStopRt_Longer",
+     "RunRoute/WR_Run90for10_Run115for30_WRDeepCornerRt_STOP_Eagles",
+     "RunRoute/WR_Run90for10_Run115for30_WRDeepCornerRt_STOP_Eagles_OutsideReleaseTE"
+    ]
+   }
+  },
+  "66": {
+   "name": "AssignRouteType_RR_Cover_2_Corner",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 8,
+   "purity": 1,
+   "assetFamily": {
+    "count": 39,
+    "samples": [
+     "Fullback/IForm_Option_Triple_Rt_SpinGive_Flexbone_PA_CornerLT",
+     "Fullback/IForm_Option_Triple_Rt_SpinGive_Flexbone_PA_Seam",
+     "HotRoute/MUTCorner_Left",
+     "HotRoute/MUTCorner_Right"
+    ]
+   }
+  },
+  "67": {
+   "name": "AssignRouteType_RR_Cross",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 80,
+   "purity": 1,
+   "assetFamily": {
+    "count": 105,
+    "samples": [
+     "HotRoute/MUTDeepCross_Left",
+     "HotRoute/MUTDeepCross_Right",
+     "HotRoute/MUTSlotDeepCross_Left",
+     "HotRoute/MUTSlotDeepCross_Right"
+    ]
+   }
+  },
+  "68": {
+   "name": "AssignRouteType_RR_Curl_Long",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 10,
+    "samples": [
+     "RunRoute/WR_Run150for06_Run90for25_Slot_Wheel_Hitch_Rt",
+     "RunRoute/WR_Run90for12_HookLt_(LR)",
+     "RunRoute/WR_Run90for12_HookRt_(LR)",
+     "RunRoute/WR_Run90for15_ComebackLt"
+    ]
+   }
+  },
+  "69": {
+   "name": "AssignRouteType_RR_Curl_Medium",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 57,
+   "purity": 1,
+   "assetFamily": {
+    "count": 93,
+    "samples": [
+     "HotRoute/Curl",
+     "HotRoute/MUTFadeStop_Left",
+     "HotRoute/MUTFadeStop_Right",
+     "OverrideFormPos/RR_WR_Z_CurlLt"
+    ]
+   }
+  },
+  "70": {
+   "name": "AssignRouteType_RR_Curl_n_Go",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 3,
+   "purity": 1,
+   "assetFamily": {
+    "count": 15,
+    "samples": [
+     "RunRoute/Automotion_WR_ShortLT_OutNUpRt",
+     "RunRoute/WR_In_and_Up_RT_Slot",
+     "RunRoute/WR_Run125for08_HookLt_N_Go",
+     "RunRoute/WR_Run125for08_HookLt_N_Go__Delay_Bunch"
+    ]
+   }
+  },
+  "71": {
+   "name": "AssignRouteType_RR_Drag",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 66,
+   "purity": 0.985,
+   "assetFamily": {
+    "count": 125,
+    "samples": [
+     "HotRoute/Drag_Left",
+     "HotRoute/Drag_Right",
+     "HotRoute/Drag__Left",
+     "HotRoute/MUTShallowCross_Left"
+    ]
+   }
+  },
+  "72": {
+   "name": "AssignRouteType_RR_Flat_Lt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 13,
+   "purity": 1,
+   "assetFamily": {
+    "count": 81,
+    "samples": [
+     "Fullback/Flexbone_Fake_Toss_Precan_74_78",
+     "Halfback/OFP_HBatZ_Automotion_ReloadLt_SG_H2_Delay_Backstep_Hand_Precan_26_32",
+     "Halfback/SG2RB_HBonRight_HBOffset_PA_Spinner_Precan_214_216_FlatLt",
+     "Halfback/SG_BehindRt_PA_CheckDown_Precan_31_30"
+    ]
+   }
+  },
+  "73": {
+   "name": "AssignRouteType_RR_Flat_Rt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 43,
+   "purity": 1,
+   "assetFamily": {
+    "count": 123,
+    "samples": [
+     "Blocking/Automotion_WR_MotionLt_RunBlock_CheatMotion",
+     "Halfback/Automotion_BounceLT_PA_QBChoiceLt_Option_HitchLtOutRt",
+     "Halfback/Automotion_HB_BounceRt_to_SG_EvenRt_FlatRt",
+     "Halfback/Automotion_HB_BounceRt_to_SG_EvenRt_OutRt"
+    ]
+   }
+  },
+  "74": {
+   "name": "AssignRouteType_RR_Hitch",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 23,
+   "purity": 1,
+   "assetFamily": {
+    "count": 88,
+    "samples": [
+     "Halfback/SG_H9_EvenRt_FBSpottRt_Precan_63_64",
+     "HotRoute/HitchLt",
+     "HotRoute/HitchRt",
+     "HotRoute/Hook_Left"
+    ]
+   }
+  },
+  "76": {
+   "name": "AssignRouteType_RR_In_Deep",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 18,
+   "purity": 1,
+   "assetFamily": {
+    "count": 39,
+    "samples": [
+     "HotRoute/MUTDeepDig_Left",
+     "HotRoute/MUTDeepDig_Right",
+     "HotRoute/MUTDeepIn_Left",
+     "HotRoute/MUTDeepIn_Right"
+    ]
+   }
+  },
+  "77": {
+   "name": "AssignRouteType_RR_In_Middle",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 40,
+   "purity": 0.95,
+   "assetFamily": {
+    "count": 68,
+    "samples": [
+     "HotRoute/MUTSpeedIn_Left",
+     "HotRoute/MUTSpeedIn_Right",
+     "HotRoute/MUTTESpeedIn_Left",
+     "HotRoute/MUTTESpeedIn_Right"
+    ]
+   }
+  },
+  "79": {
+   "name": "AssignRouteType_RR_In_Short",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 16,
+   "purity": 1,
+   "assetFamily": {
+    "count": 29,
+    "samples": [
+     "OverrideFormPos/TightSlots_RR_WR_Run90for05_CutL90_Run180for15",
+     "OverrideFormPos/TightSlots_RR_WR_Run90for05_CutL90_Run180for15_(1)",
+     "RunRoute/AutoMotion_HB_RightWR_ShortInLt",
+     "RunRoute/Automotion_WR_RightSlot_Speed_Out"
+    ]
+   }
+  },
+  "80": {
+   "name": "AssignRouteType_RR_Option_Route",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 2,
+   "purity": 1,
+   "assetFamily": {
+    "count": 61,
+    "samples": [
+     "Fullback/Flexbone_Fake_Lead_Option_Rt_Route_Precan_95_96",
+     "HotRoute/RBOptionLt",
+     "HotRoute/RBOptionRt",
+     "OptionRoute/7_Step_Optoin_Stem"
+    ]
+   }
+  },
+  "81": {
+   "name": "AssignRouteType_RR_Out_Deep",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 14,
+   "purity": 1,
+   "assetFamily": {
+    "count": 18,
+    "samples": [
+     "HotRoute/MUTDeepOut_Left",
+     "HotRoute/MUTDeepOut_Right",
+     "HotRoute/MUTEliteDeepOut_Left",
+     "HotRoute/MUTEliteDeepOut_Right"
+    ]
+   }
+  },
+  "82": {
+   "name": "AssignRouteType_RR_Out_Middle",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 27,
+   "purity": 1,
+   "assetFamily": {
+    "count": 63,
+    "samples": [
+     "Blocking/Automotion_TE_ScreenBlock_CheatLt",
+     "Blocking/Automotion_TwinTE_Left_ALL_RunBlock-Shuffle",
+     "Blocking/Automotion_TwinTE_Left_ALL_RunBlock",
+     "Blocking/Automotion_Wingback_Left_ALL_RunBlock"
+    ]
+   }
+  },
+  "83": {
+   "name": "AssignRouteType_RR_Out_N_Up",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 2,
+   "purity": 1,
+   "assetFamily": {
+    "count": 30,
+    "samples": [
+     "HotRoute/MUTOutNUp_Left",
+     "HotRoute/MUTOutNUp_Right",
+     "HotRoute/MUTStickNNod_Left",
+     "HotRoute/MUTStickNNod_Right"
+    ]
+   }
+  },
+  "85": {
+   "name": "AssignRouteType_RR_Out_Short",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 34,
+   "purity": 1,
+   "assetFamily": {
+    "count": 62,
+    "samples": [
+     "Halfback/SG2RB_OffsetLeft_PA_QBChoiceLt_Out_Lt__Precan_62_61",
+     "HotRoute/Out_Left",
+     "HotRoute/Out_Right",
+     "OverrideFormPos/RR_WR_Run90for03_CutR90_Run0for15_AlignOffBall_AlignX9_Offball"
+    ]
+   }
+  },
+  "86": {
+   "name": "AssignRouteType_RR_Post_Corner",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 5,
+   "purity": 0.8,
+   "assetFamily": {
+    "count": 16,
+    "samples": [
+     "HotRoute/MUTWRPostCorner_Left",
+     "HotRoute/MUTWRPostCorner_Right",
+     "RunRoute/Automotion_WR_SlideLt_Leak_Out_OFP",
+     "RunRoute/AutoMotion_WR_toRtSLot_PostCornerRt"
+    ]
+   }
+  },
+  "87": {
+   "name": "AssignRouteType_RR_Post_Deep",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 63,
+   "purity": 0.984,
+   "assetFamily": {
+    "count": 56,
+    "samples": [
+     "HotRoute/MUTDeepPost_Left",
+     "HotRoute/MUTDeepPost_Right",
+     "HotRoute/MUTTEDeepCross_Left",
+     "HotRoute/MUTTEDeepCross_Right"
+    ]
+   }
+  },
+  "88": {
+   "name": "AssignRouteType_RR_Post_Middle",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 36,
+   "purity": 1,
+   "assetFamily": {
+    "count": 74,
+    "samples": [
+     "HotRoute/MUTRBPost_Left",
+     "HotRoute/MUTRBPost_Right",
+     "HotRoute/MUTShortPost_Left",
+     "HotRoute/MUTShortPost_Right"
+    ]
+   }
+  },
+  "89": {
+   "name": "AssignRouteType_RR_Post_Stop",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 2,
+   "purity": 1,
+   "assetFamily": {
+    "count": 10,
+    "samples": [
+     "RunRoute/Automotion_WR_DragLt22_DeeperSTOP_RightWR",
+     "RunRoute/Option_WR_RNS_PostCurl",
+     "RunRoute/WR_Run135for05_CutR45_Run90for08_CutL45_Run135_WishboneHB2_Corner_Lt",
+     "RunRoute/WR_Run90for10_Run115for30_WRDeepPostLt_STOP"
+    ]
+   }
+  },
+  "90": {
+   "name": "AssignRouteType_RR_RB_Angle",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 6,
+   "purity": 1,
+   "assetFamily": {
+    "count": 49,
+    "samples": [
+     "Halfback/Flexbone_Fake_Lead_Angle_Route",
+     "Halfback/Flexbone_Fake_Lead_Angle_Route_Wider",
+     "HotRoute/MUTRBAngle_Left",
+     "HotRoute/MUTRBAngle_Right"
+    ]
+   }
+  },
+  "91": {
+   "name": "AssignRouteType_RR_RB_Flat_Lt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 29,
+   "purity": 1,
+   "assetFamily": {
+    "count": 53,
+    "samples": [
+     "Halfback/Flexbone_Fake_Counter_Rt_FlatLt_Precan_91_93",
+     "HotRoute/MUTRBFlat_Left",
+     "RunRoute/Block1.5_FlatsLt(FB_2Back_S_Flatter_(1)",
+     "RunRoute/FB_ALL_FlatsLt"
+    ]
+   }
+  },
+  "92": {
+   "name": "AssignRouteType_RR_RB_Flat_Rt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 44,
+   "purity": 1,
+   "assetFamily": {
+    "count": 76,
+    "samples": [
+     "Fullback/Flexbone_Fake_Rocket_Flat",
+     "Halfback/ALL_Fake_PitchRt_20_Fake_WRPitch_PA",
+     "Halfback/SB_H2_Backstep_Hand_Fake_runblock_FlatRt_FAKE_EndAround_(2)",
+     "Halfback/SB_H2_Backstep_Hand_Fake_runblock_FlatRt_FAKE_EndAround_Bunch_Precan_208_209"
+    ]
+   }
+  },
+  "93": {
+   "name": "AssignRouteType_RR_WR_Screen",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 15,
+   "purity": 1,
+   "assetFamily": {
+    "count": 87,
+    "samples": [
+     "OverrideFormPos/OFP_StackLT_WR_EmoryHenry_Screen_Rt",
+     "OverrideFormPos/OFP_StackLT_WR_EmoryHenry_Screen_Rt_Wide",
+     "OverrideFormPos/OFP_TE_DualWingLT_SlideRt",
+     "OverrideFormPos/SCREEN_WR_Bubble_Lt_Trips"
+    ]
+   }
+  },
+  "94": {
+   "name": "AssignRouteType_RR_RB_Screen_Left",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 7,
+   "purity": 1,
+   "assetFamily": {
+    "count": 21,
+    "samples": [
+     "OverrideFormPos/SCREEN_FB_SG_Delay.5_ScreenLt",
+     "OverrideFormPos/SCREEN_FB_SG_Delay.5_ScreenLt_(1)",
+     "OverrideFormPos/SCREEN_FB_SG_Delay.5_ScreenLt_Faster",
+     "OverrideFormPos/SCREEN_FB_SG_Delay5_ScreenLt_OS(1)"
+    ]
+   }
+  },
+  "95": {
+   "name": "AssignRouteType_RR_RB_Screen_Rt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 4,
+   "purity": 1,
+   "assetFamily": {
+    "count": 6,
+    "samples": [
+     "Screen/HB_ALL_Delay.5_CrossScreenRt_New12",
+     "Screen/HB_ALL_Delay.5_HBSlipScreenRt_Gun",
+     "Screen/HB_ALL_Delay.5_HBSlipScreenRt_Gun_HB_EVEN_New27",
+     "Screen/HB_ALL_Delay.5_HBSlipScreenRt_Gun_NEW21"
+    ]
+   }
+  },
+  "96": {
+   "name": "AssignRouteType_RR_Slant",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 31,
+   "purity": 1,
+   "assetFamily": {
+    "count": 75,
+    "samples": [
+     "Halfback/SG_H7_FK_Pitch_SwingLt",
+     "Halfback/SG_H7_FK_Pitch_Trail",
+     "Halfback/SG_H7_FK_PowerToss_Wheel_Precan_264_263",
+     "Halfback/SG_H8_FK_Pitch_Swing"
+    ]
+   }
+  },
+  "98": {
+   "name": "AssignRouteType_RR_Streak",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 124,
+   "purity": 1,
+   "assetFamily": {
+    "count": 91,
+    "samples": [
+     "Halfback/Flexbone_AutomotionLt_Texas_LT",
+     "Halfback/SB_Automotion_Right_Wingback_Streak_Lt",
+     "HotRoute/CustomRoute",
+     "HotRoute/MUTAnglePost_Left"
+    ]
+   }
+  },
+  "99": {
+   "name": "AssignRouteType_RR_Swing_Lt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 22,
+   "purity": 1,
+   "assetFamily": {
+    "count": 58,
+    "samples": [
+     "HotRoute/SwingLt",
+     "OverrideFormPos/OFP_HBatZ_Automotion_Orbit_Stutter_Swing_Lt",
+     "RunRoute/Automotion_HB_ALL_ScreenLt_Motion_Lt_(1)",
+     "RunRoute/Automotion_HB_ALL_ScreenLt_Motion_Lt_Wider"
+    ]
+   }
+  },
+  "100": {
+   "name": "AssignRouteType_RR_Swing_Rt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 27,
+   "purity": 1,
+   "assetFamily": {
+    "count": 96,
+    "samples": [
+     "Halfback/SB_OptionRt_wide_6_-3_AutoMotion_Left_WingBack_PA_RunRoute",
+     "Halfback/SG2RB_AutomotionRt_OptionRt_Decoy",
+     "Halfback/SG2RB_AutomotionRt_OptionRt_PA_RunRoute",
+     "HotRoute/SwingRt"
+    ]
+   }
+  },
+  "101": {
+   "name": "AssignRouteType_RR_Wheel_Lt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 15,
+   "purity": 1,
+   "assetFamily": {
+    "count": 71,
+    "samples": [
+     "Blocking/AutoMotion_TE_WheelLt_CheatMotion_Stalk_RunBlock",
+     "Halfback/SB_H3_Backstep_Hand_FlatLeft_3",
+     "Halfback/SB_H3_Backstep_Hand_FlatLeft_4",
+     "Halfback/SB_H5_Counter_Hand_PA_WHeelLt_Precan_81_84"
+    ]
+   }
+  },
+  "102": {
+   "name": "AssignRouteType_RR_Wheel_Rt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 21,
+   "purity": 1,
+   "assetFamily": {
+    "count": 94,
+    "samples": [
+     "Halfback/SG2RB_HBonLeft_PA_QBChoiceLt_Flat_WheelRt_Precan_4_27",
+     "Halfback/SG2RB_HBonLeft_PA_QBChoiceLt_SeamRt_Precan_141_142",
+     "HotRoute/MUTSlotWheel_Right",
+     "HotRoute/WheelLeft"
+    ]
+   }
+  },
+  "103": {
+   "name": "AssignRouteType_RR_Whip_In",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 4,
+   "purity": 1,
+   "assetFamily": {
+    "count": 36,
+    "samples": [
+     "HotRoute/MUTTEShake_Left",
+     "HotRoute/MUTTEShake_Right",
+     "OptionRoute/Option_Angle_InLt_HitchLt_OutRt",
+     "OptionRoute/Option_Bunch_AngleLt_HitchLt"
+    ]
+   }
+  },
+  "104": {
+   "name": "AssignRouteType_RR_Whip_Out",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 16,
+   "purity": 1,
+   "assetFamily": {
+    "count": 59,
+    "samples": [
+     "HotRoute/Zig_Left",
+     "HotRoute/Zig_Right",
+     "RunRoute/AutoMotion_HB_LeftInSlotWR_ZigOutLt",
+     "RunRoute/Automotion_SG_Split_HB_ZigOutRt"
+    ]
+   }
+  },
+  "111": {
+   "name": "AssignRouteType_QB_Handoff",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 169,
+   "purity": 1,
+   "assetFamily": {
+    "count": 245,
+    "samples": [
+     "Precan/QB_Near_FB_DiveLt_Dropback_Precan_117_118_NEW27",
+     "Precan/QB_Near_FB_DiveRt_Dropback_Precan_118_117_NEW27",
+     "Precan/QB_Option_Pistol_Weak_OutsideZoneHB2_HBonLeft",
+     "Precan/QB_PISTOL_00_HBDiveRt_Precan_2_4"
+    ]
+   }
+  },
+  "112": {
+   "name": "AssignRouteType_QB_Run",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 18,
+    "samples": [
+     "Halfback/SB_H4_Backstep_Hand_Wildcat_P1",
+     "Halfback/SB_H4_Backstep_Hand_Wildcat_P1_Split",
+     "Precan/QB_UC_HB_FAKE_InsideZoneLt_BootRt_QB_Keeper",
+     "Precan/QB_UC_HB_FAKE_InsideZoneRt_BootLt_QB_Keeper_Precan_28_29"
+    ]
+   }
+  },
+  "113": {
+   "name": "AssignRouteType_QB_Pitch",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 10,
+   "purity": 1,
+   "assetFamily": {
+    "count": 18,
+    "samples": [
+     "Precan/QB_HB_Toss_Rt_SetupQuick",
+     "Precan/QB_Shotgun_HB_BehindLeft_Toss_LT",
+     "Precan/QB_Shotgun_HB_BehindLeft_Toss_PA_LT",
+     "Precan/QB_Shotgun_HB_BehindLeft_Toss_Run_Block"
+    ]
+   }
+  },
+  "115": {
+   "name": "AssignRouteType_RR_Block_Flats_Lt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 6,
+   "purity": 1,
+   "assetFamily": {
+    "count": 17,
+    "samples": [
+     "Halfback/Pistol_QB_Choice_Lt_PA_Delay_LeakLt",
+     "HotRoute/BlockNReleaseLeft",
+     "HotRoute/BlockNRelease_TEFlat_Left",
+     "HotRoute/ChipNReleaseLeft"
+    ]
+   }
+  },
+  "116": {
+   "name": "AssignRouteType_RR_Block_Flats_Rt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 27,
+   "purity": 1,
+   "assetFamily": {
+    "count": 21,
+    "samples": [
+     "HotRoute/BlockNReleaseRight",
+     "HotRoute/BlockNRelease_TEFlat_Right",
+     "HotRoute/ChipNReleaseRight",
+     "OverrideFormPos/OFP_YatZOff_Automotion_toWingLT_TE_Block_TEInside_Outside_Late_Flat"
+    ]
+   }
+  },
+  "123": {
+   "name": "AssignRouteType_RR_Block_Hook_Lt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 4,
+   "purity": 1,
+   "assetFamily": {
+    "count": 12,
+    "samples": [
+     "HotRoute/BlockNReleaseHitch_Left",
+     "RunRoute/FB_Block_WeakI_SpotLt_Short",
+     "RunRoute/FB_IForm_H2_Run90for5_Hook_Lt",
+     "RunRoute/HB_Block_ALL_HBSpotLt_(1)"
+    ]
+   }
+  },
+  "124": {
+   "name": "AssignRouteType_RR_Block_Hook_Rt",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 20,
+   "purity": 1,
+   "assetFamily": {
+    "count": 20,
+    "samples": [
+     "HotRoute/BlockNReleaseHitch_Right",
+     "RunRoute/FB_Block_ALL_HBSpotRt_Shorter",
+     "RunRoute/HB_Block_ALL_HBSpotRt",
+     "RunRoute/HB_Block_ALL_HBSpotRt_(1)"
+    ]
+   }
+  },
+  "125": {
+   "name": "AssignRouteType_RR_Block_Circle",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 2,
+   "purity": 1,
+   "assetFamily": {
+    "count": 3,
+    "samples": [
+     "RunRoute/HB_Block_CircleLt",
+     "RunRoute/HB_Block_CircleRt",
+     "RunRoute/HB_Block_Pivot_Inside_Rt"
+    ]
+   }
+  },
+  "126": {
+   "name": "AssignRouteType_RR_Slant_Hook",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 39,
+   "purity": 1,
+   "assetFamily": {
+    "count": 98,
+    "samples": [
+     "OverrideFormPos/RR_WR_Run125for08_HookLt__Delay_Align13_Offball",
+     "RunRoute/Automotion_TE_ExitRT_Run45for03_SmashLt",
+     "RunRoute/Automotion_TE_WingRt_ToSLotWR_Rt_Run135for05_SmashLt",
+     "RunRoute/AutoMotion_WR_LefttoRight_HookLt"
+    ]
+   }
+  },
+  "130": {
+   "name": "AssignRouteType_WR_Reverse",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 11,
+   "purity": 1,
+   "assetFamily": {
+    "count": 88,
+    "samples": [
+     "OverrideFormPos/OFP_Automotion_Z_JetLt",
+     "OverrideFormPos/OFP_Automotion_Z_JetLt_Higher",
+     "OverrideFormPos/OFP_Automotion_Z_JetLt_Higher_Route",
+     "OverrideFormPos/OFP_Automotion_Z_JetLt_Route_Earlier"
+    ]
+   }
+  },
+  "133": {
+   "name": "AssignRouteType_Def_Man_1",
+   "evidence": "DEFENSIVE_APPENDED_MAN_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 3207,
+    "meanX": 15.3,
+    "meanY": 6.69,
+    "pctPosX": 0.999,
+    "pctNegX": 0.001,
+    "topPositionTypes": [
+     [
+      16,
+      3026
+     ],
+     [
+      18,
+      122
+     ],
+     [
+      17,
+      59
+     ]
+    ],
+    "samplePlays": [
+     "Cover 2 Man",
+     "Cover 1 Hole",
+     "Cover 1 Robber Press"
+    ]
+   },
+   "assetFamily": {
+    "count": 23,
+    "directories": {
+     "DefenseMan": 23
+    },
+    "samples": [
+     "DefenseMan/Man1_Backpedal_Shade0",
+     "DefenseMan/Man1_PuntRet",
+     "DefenseMan/ManLock1_Backpedal_FG_SafeMan",
+     "DefenseMan/ManLock1_Backpedal_FG_SafeMan2"
+    ],
+    "zones": [],
+    "strategies": [],
+    "coverMan": [
+     "MAN_COVER1"
+    ],
+    "opcodes": [
+     "ID_DEFALIGNMENT",
+     "ID_DELAY",
+     "ID_MANCOVERAGE",
+     "ID_PASSRUSH"
+    ]
+   }
+  },
+  "134": {
+   "name": "AssignRouteType_Def_Man_2",
+   "evidence": "DEFENSIVE_APPENDED_MAN_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 2622,
+    "meanX": 5.41,
+    "meanY": 6.3,
+    "pctPosX": 0.953,
+    "pctNegX": 0.045,
+    "topPositionTypes": [
+     [
+      18,
+      795
+     ],
+     [
+      33,
+      355
+     ],
+     [
+      34,
+      298
+     ],
+     [
+      15,
+      247
+     ]
+    ],
+    "samplePlays": [
+     "Cover 2 Man",
+     "Cover 1 Robber Press",
+     "Over Storm Brave"
+    ]
+   },
+   "assetFamily": {
+    "count": 38,
+    "directories": {
+     "DefenseMan": 38
+    },
+    "samples": [
+     "DefenseMan/Man2_Slide_Shade0",
+     "DefenseMan/Man2_Slide_Shade2",
+     "DefenseMan/ManLock2_Backpedal_Shade9",
+     "DefenseMan/ManLock2_NoTrans_FG_SafeMan"
+    ],
+    "zones": [],
+    "strategies": [],
+    "coverMan": [
+     "MAN_COVER2",
+     "MAN_COVER3"
+    ],
+    "opcodes": [
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_DELAY",
+     "ID_MANCOVERAGE",
+     "ID_SHOWBLITZ"
+    ]
+   }
+  },
+  "135": {
+   "name": "AssignRouteType_Def_Man_3",
+   "evidence": "DEFENSIVE_APPENDED_MAN_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 3077,
+    "meanX": 1.97,
+    "meanY": 6.42,
+    "pctPosX": 0.564,
+    "pctNegX": 0.263,
+    "topPositionTypes": [
+     [
+      33,
+      979
+     ],
+     [
+      14,
+      763
+     ],
+     [
+      18,
+      655
+     ],
+     [
+      15,
+      253
+     ]
+    ],
+    "samplePlays": [
+     "Cover 1 Hole",
+     "Cover 2 Man",
+     "Cover 1 LB Blitz"
+    ]
+   },
+   "assetFamily": {
+    "count": 19,
+    "directories": {
+     "DefenseMan": 18,
+     "MiniGame": 1
+    },
+    "samples": [
+     "DefenseMan/Man3_Backpedal_Shade2",
+     "DefenseMan/Man3_Slide_Shade2",
+     "DefenseMan/ManLock2_NoTrans_Shade10_GoalLine_Nickel_Cover_1_SS",
+     "DefenseMan/ManLock2_Sub_Cov_1_Bunch_Nickel_SS"
+    ],
+    "zones": [],
+    "strategies": [],
+    "coverMan": [
+     "MAN_COVER2",
+     "MAN_COVER3"
+    ],
+    "opcodes": [
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_MANCOVERAGE",
+     "ID_SHOWBLITZ"
+    ]
+   }
+  },
+  "136": {
+   "name": "AssignRouteType_Def_Man_4",
+   "evidence": "DEFENSIVE_APPENDED_MAN_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 2737,
+    "meanX": -7.11,
+    "meanY": 5.68,
+    "pctPosX": 0.035,
+    "pctNegX": 0.958,
+    "topPositionTypes": [
+     [
+      34,
+      983
+     ],
+     [
+      17,
+      457
+     ],
+     [
+      15,
+      425
+     ],
+     [
+      18,
+      317
+     ]
+    ],
+    "samplePlays": [
+     "Cover 2 Man",
+     "Cover 1 Hole",
+     "Cover 1 Robber Press"
+    ]
+   },
+   "assetFamily": {
+    "count": 41,
+    "directories": {
+     "DefenseMan": 41
+    },
+    "samples": [
+     "DefenseMan/Bracket_Switch_Nickel",
+     "DefenseMan/Man4_Slide_Shade0",
+     "DefenseMan/ManLock2_NoTrans_Shade10_GoalLine_Any_Align",
+     "DefenseMan/ManLock2_NoTrans_Shade10_Press_Any_Align"
+    ],
+    "zones": [],
+    "strategies": [],
+    "coverMan": [
+     "MAN_COVER2",
+     "MAN_COVER3",
+     "MAN_COVER4"
+    ],
+    "opcodes": [
+     "ID_DEFALIGNMENT",
+     "ID_DEFMOVEMENT",
+     "ID_DELAY",
+     "ID_MANCOVERAGE",
+     "ID_SHOWBLITZ"
+    ]
+   }
+  },
+  "137": {
+   "name": "AssignRouteType_Def_Man_5",
+   "evidence": "DEFENSIVE_APPENDED_MAN_BLOCK+ALIGNMENT",
+   "alignment": {
+    "n": 3099,
+    "meanX": -15.1,
+    "meanY": 6.59,
+    "pctPosX": 0,
+    "pctNegX": 1,
+    "topPositionTypes": [
+     [
+      16,
+      2639
+     ],
+     [
+      17,
+      174
+     ],
+     [
+      18,
+      174
+     ],
+     [
+      11,
+      93
+     ]
+    ],
+    "samplePlays": [
+     "Cover 2 Man",
+     "Cover 1 Hole",
+     "Cover 1 Robber Press"
+    ]
+   },
+   "assetFamily": {
+    "count": 19,
+    "directories": {
+     "DefenseMan": 19
+    },
+    "samples": [
+     "DefenseMan/Man5_Backpedal_Shade0",
+     "DefenseMan/Man5_PuntRet",
+     "DefenseMan/ManLock5_Backpedal_FG_SafeMan",
+     "DefenseMan/ManLock5_Backpedal_FG_SafeMan2"
+    ],
+    "zones": [],
+    "strategies": [],
+    "coverMan": [
+     "MAN_LAST"
+    ],
+    "opcodes": [
+     "ID_DEFALIGNMENT",
+     "ID_DELAY",
+     "ID_MANCOVERAGE",
+     "ID_PASSRUSH"
+    ]
+   }
+  },
+  "141": {
+   "name": "AssignRouteType_RR_Fade",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 30,
+   "purity": 1,
+   "assetFamily": {
+    "count": 17,
+    "samples": [
+     "HotRoute/Fade_Left",
+     "HotRoute/Fade_Right",
+     "HotRoute/WRFade_Lt",
+     "HotRoute/WRFade_Rt"
+    ]
+   }
+  },
+  "145": {
+   "name": "AssignRouteType_RR_Option_Curl_Dig",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 8,
+    "samples": [
+     "RunRoute/Option_WR_Run135for02_Run90for08_TE_Rt",
+     "RunRoute/Option_WR_Run45for02_Run90for08_TE_tLt",
+     "RunRoute/Option_WR_Run90for05_CurlRtOutRt",
+     "RunRoute/Option_WR_Run90for08_CurlRtOutRt_(1)"
+    ]
+   }
+  },
+  "147": {
+   "name": "AssignRouteType_RR_Option_Curl_Post_Seam",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 4,
+   "purity": 1,
+   "assetFamily": {
+    "count": 11,
+    "samples": [
+     "RunRoute/Option_WR_Run100for07_PostCurlSeam",
+     "RunRoute/Option_WR_Run90for08_TERtPostCurlSeam(1)",
+     "RunRoute/Option_WR_Run90for08_TERtPostCurlSeam",
+     "RunRoute/Option_WR_Run90for10_PostCurlDig_Skinny"
+    ]
+   }
+  },
+  "150": {
+   "name": "AssignRouteType_RR_Option_Drag_Hitch",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 5,
+   "purity": 1,
+   "assetFamily": {
+    "count": 14,
+    "samples": [
+     "OverrideFormPos/RR_WR_DragRt24",
+     "OverrideFormPos/RR_WR_DragRt24_Option_HitchRt_OFP_X-10_OnBall",
+     "RunRoute/Automotion_WR_Kelce_MeshRewind_Rt",
+     "RunRoute/Automotion_WR_Kelce_Option_DragLt22_HitchLt_Deeper"
+    ]
+   }
+  },
+  "152": {
+   "name": "AssignRouteType_RR_Option_HB_Choice_In_Out",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 6,
+   "purity": 1,
+   "assetFamily": {
+    "count": 20,
+    "samples": [
+     "OverrideFormPos/OFP_HBatZ_Automotion_ReloadLt_SG_HBChoice",
+     "RunRoute/Automotion_ShuffleLT_HBHitchRT",
+     "RunRoute/Automotion_ShuffleLT_HB_Option_HB_Choice_In_or_Out_Left_Side",
+     "RunRoute/Automotion_ShuffleLT_HB_Option_HB_Choice_In_or_Out_Left_Side_X-7_GunOffsetRt"
+    ]
+   }
+  },
+  "153": {
+   "name": "AssignRouteType_RR_Option_HB_Choice_Out",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 5,
+   "purity": 1,
+   "assetFamily": {
+    "count": 5,
+    "samples": [
+     "RunRoute/Option_HB_Block_ALL_FlatsLt_Test",
+     "RunRoute/Option_HB_Block_ALL_FlatsRt_Test",
+     "RunRoute/Option_HB_Block_ALL_FlatsRt_Test_SG_onLeft",
+     "RunRoute/Option_HB_SG_FlatsLt_HookRt"
+    ]
+   }
+  },
+  "154": {
+   "name": "AssignRouteType_RR_Option_Hitch_Fade",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 3,
+   "purity": 1,
+   "assetFamily": {
+    "count": 13,
+    "samples": [
+     "RunRoute/Option_WR_DeepReadLt_OffBall",
+     "RunRoute/Option_WR_DeepReadLt_OffBall_Straight",
+     "RunRoute/Option_WR_Deep_ReadRt",
+     "RunRoute/Option_WR_Hitch_Fade_Lt"
+    ]
+   }
+  },
+  "156": {
+   "name": "AssignRouteType_RR_Option_HB_Choice_In_Out",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 1,
+   "purity": 1,
+   "assetFamily": {
+    "count": 20,
+    "samples": [
+     "OverrideFormPos/OFP_HBatZ_Automotion_ReloadLt_SG_HBChoice",
+     "RunRoute/Automotion_ShuffleLT_HBHitchRT",
+     "RunRoute/Automotion_ShuffleLT_HB_Option_HB_Choice_In_or_Out_Left_Side",
+     "RunRoute/Automotion_ShuffleLT_HB_Option_HB_Choice_In_or_Out_Left_Side_X-7_GunOffsetRt"
+    ]
+   }
+  },
+  "157": {
+   "name": "AssignRouteType_RR_Option_Hitch_Out",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 10,
+   "purity": 1,
+   "assetFamily": {
+    "count": 18,
+    "samples": [
+     "RunRoute/Automotion_WR_LtSlot_Run90for10_Option_HitchRtOutLt",
+     "RunRoute/Option_WR_Hitch_Replace_LT",
+     "RunRoute/Option_WR_RNS_ZRead_RT",
+     "RunRoute/Option_WR_Run50for07_HitchRt_OutRt"
+    ]
+   }
+  },
+  "161": {
+   "name": "AssignRouteType_RR_Option_Seam_Bender",
+   "evidence": "OFFENSIVE_FROSTBITE_JOIN",
+   "observations": 6,
+   "purity": 1,
+   "assetFamily": {
+    "count": 5,
+    "samples": [
+     "RunRoute/Option_WR_Run90for08_TESLot_SeamLtSide_(1)",
+     "RunRoute/Option_WR_Run90for08_TESLot_SeamLtSide_Straight",
+     "RunRoute/Option_WR_Run90for08_TESLot_SeamRtSide",
+     "RunRoute/Option_WR_Run90for08_TESLot_SeamRtSide_(1)"
+    ]
+   }
+  }
+ }
+}

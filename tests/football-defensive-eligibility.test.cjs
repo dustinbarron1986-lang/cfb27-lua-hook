@@ -15,7 +15,9 @@ const {
   SPECIAL_TEAMS,
 } = require('../src/football/recommendation/defensive-eligibility');
 
-const RAW_PLAYBOOKS_DIR = 'C:/CFB27Tools/Research/Playbooks';
+const { researchPath } = require('./helpers/research-paths.cjs');
+
+const RAW_PLAYBOOKS_DIR = researchPath('Playbooks') || 'C:/CFB27Tools/Research/Playbooks';
 
 function parseFormationNameToClassifications(xml) {
   const formIdToName = new Map();
