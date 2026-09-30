@@ -96,11 +96,12 @@ test('derived quarter learns variable period high-water rather than assuming ten
   assert.ok(q2.periodHighWater >= 894);
 });
 
-test('authoritative GETQUARTER value wins over stale memory quarter', () => {
+test('conflicting GETQUARTER does not outrank memory without lifecycle evidence', () => {
   const tracker = new GamePhaseTracker();
   const row = tracker.resolve({ rawQuarter: 1, apiQuarter: 3, gameClockSeconds: 550 });
-  assert.equal(row.quarter, 3);
-  assert.equal(row.quarterSource, QUARTER_SOURCE.AUTHORITATIVE_API);
+  assert.equal(row.quarter, 1);
+  assert.equal(row.quarterConfidence, 'LOW');
+  assert.equal(row.quarterEvidenceConflict, true);
 });
 
 test('second clock wrap emits halftime lifecycle; third reaches Q4', () => {
