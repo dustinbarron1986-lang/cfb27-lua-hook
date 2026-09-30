@@ -196,7 +196,10 @@ local function publish_state()
     local quarterApi = safe_global_number("GETQUARTER", 1, 20)
     local clockApi = safe_global_number("GETTIMEREMAINING", 0, 60 * 60)
     local scoreDiffApi = safe_global_number("GETSCOREDIFF", -200, 200)
-    local quarter = quarterApi or quarterMemory
+    local quarterDisagreement = quarterApi ~= nil and quarterMemory ~= nil and quarterApi ~= quarterMemory
+    -- Neither source becomes authoritative merely because its numeric value is valid.
+    -- GamePhaseTracker reconciles both sources with lifecycle/clock-wrap evidence.
+    local quarter = quarterMemory or quarterApi
     local possession = cfb.read_u8(state + 0x178)
     local down       = read_u32(state + 0x17C)
     local distance   = read_u32(state + 0x180)
@@ -284,7 +287,10 @@ local function publish_state()
         quarter = quarter,
         rawQuarter = quarterMemory,
         apiQuarter = quarterApi,
-        quarterTelemetrySource = quarterApi ~= nil and "AUTHORITATIVE_API" or "MEMORY",
+        quarterTelemetrySource = quarterDisagreement and "DISAGREEMENT" or
+            ((quarterApi ~= nil and quarterMemory ~= nil) and "CONSENSUS" or
+            (quarterApi ~= nil and "API_CANDIDATE" or "MEMORY_CANDIDATE")),
+        quarterDisagreement = quarterDisagreement,
 
         homeScore = homeScore,
         awayScore = awayScore,
