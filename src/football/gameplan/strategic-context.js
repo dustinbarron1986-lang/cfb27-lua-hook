@@ -28,6 +28,9 @@ function fourMinuteStrength(situation = {}) {
   const q = finite(situation.quarter);
   const clock = finite(situation.clockSeconds);
   const diff = finite(situation.scoreDifferential);
+  const uncertainPhase = situation.quarterConfidence === 'LOW' ||
+    (situation.quarterEvidenceConflict === true && situation.quarterConfidence !== 'HIGH');
+  if (uncertainPhase) return 0;
   if (q == null || q < 4 || clock == null || diff == null || diff <= 0) return 0;
   // Begins gently outside four minutes and ramps hard with lead size/time.
   const time = clock <= 240 ? 1 : clock <= 360 ? 0.78 : clock <= 720 ? 0.18 : 0;
