@@ -65,6 +65,7 @@ function weightedProfile(rows, currentSignals, getSignals) {
 
   return {
     sampleSize: rows.length,
+    confidence: confidenceFromSample(rows.length),
     totalWeight: total,
     primary: ordered[0]?.key || null,
     signals: ordered,
