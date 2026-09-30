@@ -398,14 +398,12 @@ function advisePreSnapCoordinator({
       audiblePackage,
       authoritativeKnowledge,
       reasons: [
-        ...(assignmentMatchup.available
-          ? assignmentMatchup.reasons
-          : (empiricalCoverage.available
-            ? ['Empirical route/coverage evidence is secondary because individual defensive assignments are unresolved.']
-            : [])),
         pressure
           ? 'Current play already carries a structurally credible quick pressure answer; no larger adjustment is justified.'
-          : 'Current play remains a structurally valid answer to the revealed defense.',
+          : 'Current play remains structurally sound against ' + (defense.coverageFamily || defensiveCall.name || 'the revealed defense') + '.',
+        ...(assignmentMatchup.available
+          ? assignmentMatchup.reasons
+          : ['Exact individual defender responsibilities are unavailable, so assignment-matchup confidence is limited and broad structure remains the fallback.']),
       ],
       confidence: defense.provenance === 'DERIVED_STRUCTURAL' ? 'HIGH' : 'MEDIUM',
       source: 'COUNTER_MODEL',
