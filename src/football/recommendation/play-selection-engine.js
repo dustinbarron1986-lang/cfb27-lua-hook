@@ -2,6 +2,15 @@ const { scoreSituation } = require("./situation-scorer");
 const { evaluateOffensiveCandidate } = require("./counter-model");
 const { objectiveFit } = require("../gameplan/drive-objective");
 const { hashGeometryScore } = require("../analysis/hash-geometry");
+const { fourMinuteStrength } = require("../gameplan/strategic-context");
+
+// Local CFB27 evidence gains influence smoothly with sample size; the same
+// constant retires the generic empirical prior as local attempts accumulate.
+const LOCAL_SAMPLE_K = 8;
+function sampleConfidence(n) {
+  const attempts = Math.max(0, Number(n) || 0);
+  return attempts / (attempts + LOCAL_SAMPLE_K);
+}
 
 function mean(values) {
   const nums = values.filter(v => Number.isFinite(v));
@@ -75,22 +84,25 @@ function recentContextualResult(events, play, situation = {}, sequenceAligned = 
     reasons:['recent contextual result: exact play recently failed in a similar context'+(sequenceAligned?'; sequence intent reduces the caution':'')]};
 }
 
+const SATURATION_CAP = 1.6;
+
 function usageSaturation(store, play, counter, situation) {
   const summary = store.summarizePlay(play.id);
   const attempts = Number(summary.attempts || 0);
   if (attempts < 5) return { score: 0, attempts, exploit: false, reasons: [] };
 
-  let penalty = 0;
-  if (attempts >= 5) penalty -= Math.min(1.0, (attempts - 4) * 0.16);
-  if (attempts >= 10) penalty -= Math.min(1.5, (attempts - 9) * 0.24);
-  if (attempts >= 15) penalty -= Math.min(2.0, (attempts - 14) * 0.30);
-  if (attempts >= 20) penalty -= Math.min(2.0, (attempts - 19) * 0.36);
+  // Self-scout exposure cost, bounded at SATURATION_CAP so it stays a
+  // tendency signal rather than the largest term in the total (it previously
+  // reached -6.5 and forced variety). A proven answer (strong structural fit,
+  // or sustained high success over a real sample) keeps most of its value.
+  let penalty = -Math.min(SATURATION_CAP, (attempts - 4) * 0.08 + Math.max(0, attempts - 12) * 0.04);
 
   const success = Number(summary.situationalSuccessRate);
   const fit = Number(counter?.fit);
-  const exploit = success >= 0.58 && fit >= 0.72 && counter?.gate?.valid !== false &&
+  const provenAnswer = fit >= 0.72 || (success >= 0.75 && attempts >= 8);
+  const exploit = success >= 0.58 && provenAnswer && counter?.gate?.valid !== false &&
     !situation?.flags?.fourMinute && !situation?.flags?.trailingLate;
-  if (exploit) penalty *= 0.48;
+  if (exploit) penalty *= 0.4;
 
   return {
     score: penalty,
@@ -120,35 +132,35 @@ function performanceScore(store, play, situation) {
     recentFailureEscalation: 0
   };
 
+  // Raw rates are shrunk by sample confidence: n=2 moves a play by at most a
+  // few tenths, n=24 by most of the raw value. Same-situation failures are
+  // represented once (contextualSuccess); they are not escalated separately.
+  const playWeight = sampleConfidence(playSummary.attempts);
+  const situationWeight = sampleConfidence(situationSummary.attempts);
   if (playSummary.attempts >= 2) {
     if (playSummary.situationalSuccessRate != null) {
-      components.exactPlaySuccess = (playSummary.situationalSuccessRate - 0.5) * 3.0;
+      components.exactPlaySuccess = (playSummary.situationalSuccessRate - 0.5) * 3.0 * playWeight;
       reasons.push(`game-day play success ${Math.round(playSummary.situationalSuccessRate * 100)}% (${playSummary.attempts} calls)`);
     }
 
     if (playSummary.avgYards != null) {
-      components.yardage = bounded((playSummary.avgYards - 4.0) * 0.18, -1.5, 1.2);
+      components.yardage = bounded((playSummary.avgYards - 4.0) * 0.18, -1.5, 1.2) * playWeight;
       reasons.push(`game-day average ${playSummary.avgYards.toFixed(1)} yards`);
     }
 
     if (playSummary.negativePlayRate != null && playSummary.negativePlayRate > 0) {
-      components.negativePlays = -playSummary.negativePlayRate * 2.4;
+      components.negativePlays = -playSummary.negativePlayRate * 2.4 * playWeight;
       if (playSummary.negativePlayRate >= 0.34) reasons.push(`${Math.round(playSummary.negativePlayRate * 100)}% negative-play rate`);
     }
 
     if (playSummary.turnoverRate > 0) {
-      components.turnovers = -playSummary.turnoverRate * 2.5;
+      components.turnovers = -playSummary.turnoverRate * 2.5 * playWeight;
       reasons.push("game-day turnover history reduces confidence");
     }
 
     if (situationSummary.attempts >= 2 && situationSummary.situationalSuccessRate != null) {
-      components.contextualSuccess = (situationSummary.situationalSuccessRate - 0.5) * 3.2;
+      components.contextualSuccess = (situationSummary.situationalSuccessRate - 0.5) * 3.2 * situationWeight;
       reasons.push(`same-situation success ${Math.round(situationSummary.situationalSuccessRate * 100)}% (${situationSummary.attempts} calls)`);
-    }
-
-    if (situationSummary.attempts >= 2 && situationSummary.situationalSuccessRate === 0) {
-      components.recentFailureEscalation = -Math.min(1.5, 0.55 + (situationSummary.attempts - 2) * 0.35);
-      reasons.push("multiple same-situation failures add sample-backed caution without hard-banning the play");
     }
   } else {
     const usable = conceptSummaries.filter(x => x.attempts >= 2 && x.situationalSuccessRate != null);
@@ -160,7 +172,7 @@ function performanceScore(store, play, situation) {
   }
 
   score = Object.values(components).reduce((a,b) => a + b, 0);
-  return { score, reasons, components, playSummary, situationSummary };
+  return { score, reasons, components, playSummary, situationSummary, sampleWeight: { play: playWeight, situation: situationWeight } };
 }
 
 function setupScore(sequenceMemory, store, play) {
@@ -216,6 +228,7 @@ class PlaySelectionEngine {
     const historicalSampleSize = Number(defenseProfile.sampleSize || 0);
     const historicalConfidenceWeight = !oracle ? historicalDefenseInfluence(historicalSampleSize) : 0;
     const historicalStructureAvailable = !oracle && historicalSampleSize > 0;
+    const clockStrength = fourMinuteStrength(situation);
 
     const evaluated = plays.map(originalPlay => {
       const normalizedProfile = this.offensiveProfiles?.profile
@@ -229,19 +242,26 @@ class PlaySelectionEngine {
       const empiricalCoverage = oracle && this.empiricalPrior?.routeCoverageEvidence
         ? this.empiricalPrior.routeCoverageEvidence(normalizedProfile, defensePlay || {})
         : { available:false, score:0 };
-      const objectivePart = objectiveFit(normalizedProfile, driveObjective?.objective);
+      const objectivePart = objectiveFit(normalizedProfile, driveObjective?.objective, { clockOwnership: clockStrength });
       const hashPart = hashGeometryScore(play, situation, null);
       const intentPart = this.sequences?.candidateIntentFit
         ? this.sequences.candidateIntentFit(play, sequenceIntent, plays)
         : { aligned:false, tier:0 };
-      const contextualResult = recentContextualResult(events, play, situation, Boolean(intentPart.aligned));
+      const performancePart = performanceScore(this.store, play, situation);
+      // recentContextualResult and performance.contextualSuccess read the same
+      // exact-play/same-situation events; once two such attempts exist the
+      // sample-weighted rate owns that evidence.
+      const contextualOwnedByPerformance = Number(performancePart.situationSummary?.attempts || 0) >= 2;
+      const contextualRaw = recentContextualResult(events, play, situation, Boolean(intentPart.aligned));
+      const contextualResult = contextualOwnedByPerformance
+        ? { ...contextualRaw, score: 0, suppressedBy: 'gameDayPerformance.contextualSuccess', reasons: [] }
+        : contextualRaw;
       const selfScoutPart = !oracle && this.selfScout?.candidateValue
         ? this.selfScout.candidateValue(play)
         : { score:0, reason:null, scout:null };
       const tendencyPart = this.tendencies.scoreCandidate(play, tendency);
-      const performancePart = performanceScore(this.store, play, situation);
       const localSituationAttempts = Number(performancePart.situationSummary?.attempts || 0);
-      const localWeight = localSituationAttempts / (localSituationAttempts + 8);
+      const localWeight = sampleConfidence(localSituationAttempts);
       const genericWeight = 1 - localWeight;
       const empiricalSituationScore = empiricalSituation.available ? empiricalSituation.score * genericWeight : 0;
       const learningBlend = {
@@ -277,7 +297,8 @@ class PlaySelectionEngine {
         situation: situationPart.score,
         gameDayPerformance: performancePart.score * 0.45,
         usageSaturation: saturation.score * 0.35,
-        historicalTendency: tendencyPart.score * 0.20,
+        // Fresh exact defense supersedes this opponent's historical tendency.
+        historicalTendency: 0,
         executionRepetition: executionRepetition * 0.35,
         recommendationRepetition: recommendationPenalty.score,
         recentContextualResult: contextualResult.score,
@@ -288,7 +309,9 @@ class PlaySelectionEngine {
         // prior defensive structure rather than a not-yet-known exact call.
         historicalStructureFit: historicalStructureAvailable ? counter.score * historicalConfidenceWeight : 0,
         situation: situationPart.score,
-        historicalTendency: tendencyPart.score * 0.75,
+        // Historical opponent tendency and historicalStructureFit read the
+        // same opponent calls; the confidence-weighted structural fit owns it.
+        historicalTendency: 0,
         gameDayPerformance: performancePart.score,
         usageSaturation: saturation.score,
         executionRepetition,
@@ -301,7 +324,8 @@ class PlaySelectionEngine {
         gameplanFit: bounded(Number(strategyPart.components?.gameplanFit || 0), -0.30, 0.45),
         callSheetMembership: 0,
         gameplanMixAccountability: bounded(Number(strategyPart.components?.gameplanMixAccountability || 0), -0.35, 0.45),
-        strategicSituation: strategyPart.components?.strategicSituation || 0,
+        // strategicPlayScore is already applied once inside `situation`.
+        strategicSituation: 0,
         // Sequencing is an upstream intent layer. Legacy strategy components
         // remain visible in diagnostics below, but are intentionally not added
         // into the flat candidate total.
@@ -322,7 +346,6 @@ class PlaySelectionEngine {
           ? counter.reasons.map(r => r.replace('punishes current defense with:', 'historical defensive profile favors:'))
           : []),
         ...situationPart.reasons,
-        ...tendencyPart.reasons,
         ...performancePart.reasons,
         ...saturation.reasons,
         ...recommendationPenalty.reasons,
@@ -373,6 +396,11 @@ class PlaySelectionEngine {
             appliedContribution: Number((historicalStructureAvailable ? counter.score * historicalConfidenceWeight : 0).toFixed(3)),
           },
           strategy: strategyPart,
+          suppressedEvidence: {
+            historicalTendency: { raw: tendencyPart.score, reason: oracle ? 'exact defense known' : 'owned by historicalStructureFit' },
+            gameplanStrategicSituation: { raw: strategyPart.components?.strategicSituation || 0, reason: 'strategicPlayScore applied once inside situation' },
+            recentContextualResult: contextualOwnedByPerformance ? { raw: contextualRaw.score, reason: 'owned by gameDayPerformance.contextualSuccess' } : null,
+          },
           legacySequenceScoring: {
             appliedToTotal: false,
             manualSetupCompatibility: setupPart,
@@ -447,4 +475,4 @@ class PlaySelectionEngine {
   }
 }
 
-module.exports = { PlaySelectionEngine, performanceScore, recentRepetitionPenalty, usageSaturation, historicalDefenseInfluence, recentContextualResult };
+module.exports = { PlaySelectionEngine, sampleConfidence, LOCAL_SAMPLE_K, performanceScore, recentRepetitionPenalty, usageSaturation, historicalDefenseInfluence, recentContextualResult };

@@ -56,6 +56,17 @@ function eventPresentation(event = {}) {
   };
 }
 
+// Relationship strength decides the payoff tier: a play-action or same-look
+// counter is a real complement; "any pass from the same formation" is only a
+// weak one and must not outrank repeating a working base play.
+const RELATIONSHIP_TIER = Object.freeze({
+  RUN_TO_PLAY_ACTION: 2,
+  INSIDE_TO_OUTSIDE: 2,
+  OUTSIDE_TO_INSIDE: 2,
+  PASS_TO_SAME_LOOK_COUNTER: 2,
+  RUN_TO_COMPLEMENTARY_PASS: 1,
+});
+
 function relationshipBetween(setup = {}, candidate = {}) {
   const setupProfile = setup.normalizedProfile || {};
   const candidateProfile = candidate.normalizedProfile || {};
@@ -153,7 +164,7 @@ class SequenceMemory {
   intent(playbook = []) {
     const events = trailingUserDrive(this.store.getAll());
     if (!events.length) {
-      return { type: 'ESTABLISH', formation: null, family: null, reason: 'No current-drive exposure yet; establish a credible base presentation.', confidence: 'LOW' };
+      return { type: 'ESTABLISH', stage: 'ESTABLISH_BASE', formation: null, family: null, reason: 'No current-drive exposure yet; establish a credible base presentation.', confidence: 'LOW' };
     }
 
     const rows = events.map(eventPresentation);
@@ -169,13 +180,24 @@ class SequenceMemory {
         .map(play => ({ play, relation: relationshipBetween(setup, play) }))
         .filter(row => row.relation.relationship);
       if (complements.length) {
+        const setupFamily = playFamily(setup);
+        const familyRows = fromFormation.filter(e => playFamily(e.play) === setupFamily);
+        const latestSetupSucceeded = Boolean(familyRows[familyRows.length - 1]?.grades?.offense?.situationalSuccess);
         return {
           type: 'PAYOFF',
+          // A working base play stays a first-class option (repeat what works);
+          // after it is stopped, the complement leads. Payoff is never forced
+          // merely because N calls have happened.
+          stage: latestSetupSucceeded ? 'REPEAT_OR_PAYOFF' : 'PAYOFF_AFTER_STOP',
           formation,
-          family: playFamily(setup),
+          family: setupFamily,
           setupPlayId: setup.id,
+          setupPlay: setup,
+          latestSetupSucceeded,
           relationships: unique(complements.map(row => row.relation.relationship)),
-          reason: 'The current drive has shown the same presentation enough to make a complementary answer credible.',
+          reason: latestSetupSucceeded
+            ? 'The same presentation is working; repeating it and its complement are both credible.'
+            : 'The same presentation was just stopped; a complementary answer from the same look is favored.',
           confidence: successful.length >= 2 ? 'MEDIUM' : 'LOW',
         };
       }
@@ -183,6 +205,7 @@ class SequenceMemory {
 
     return {
       type: 'ESTABLISH',
+      stage: 'ESTABLISH_SAME_LOOK',
       formation,
       family: playFamily(setup),
       reason: successful.length
@@ -195,15 +218,29 @@ class SequenceMemory {
   candidateIntentFit(play, intent, playbook = []) {
     if (!intent) return { aligned: false, tier: 0, relationship: null, reason: null };
     if (intent.type === 'PAYOFF' && intent.setupPlayId != null) {
-      const setup = playbook.find(row => String(row.id) === String(intent.setupPlayId));
-      const relation = relationshipBetween(setup || {}, play);
+      // intent() resolves the setup play once; the playbook lookup is only a
+      // fallback for intents built elsewhere.
+      const setup = intent.setupPlay || playbook.find(row => String(row.id) === String(intent.setupPlayId)) || {};
+      const relation = relationshipBetween(setup, play);
       if (relation.relationship) {
         return {
           aligned: true,
-          tier: 2,
+          tier: RELATIONSHIP_TIER[relation.relationship] || 1,
           relationship: relation.relationship,
           reason: 'Candidate preserves the established presentation and supplies a discovered sequence complement.',
           provenance: relation.provenance,
+        };
+      }
+      const sameLook = setup.formation && String(play.formation || '').toLowerCase() === String(setup.formation).toLowerCase();
+      if (sameLook && playFamily(play) && playFamily(play) === intent.family) {
+        return {
+          aligned: true,
+          tier: intent.latestSetupSucceeded ? 2 : 1,
+          relationship: 'REPEAT_SUCCESSFUL_LOOK',
+          reason: intent.latestSetupSucceeded
+            ? 'Candidate repeats the working same-look answer; repetition is valid until the defense stops it.'
+            : 'Candidate repeats the same-look answer that was just stopped.',
+          provenance: 'DERIVED',
         };
       }
     }
@@ -222,6 +259,7 @@ class SequenceMemory {
 }
 
 module.exports = {
+  RELATIONSHIP_TIER,
   SequenceMemory,
   confidenceFromSample,
   trailingUserDrive,

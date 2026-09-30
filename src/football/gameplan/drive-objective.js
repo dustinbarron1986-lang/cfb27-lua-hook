@@ -100,7 +100,10 @@ class DriveObjectiveTracker {
   }
 }
 
-function objectiveFit(profile = {}, objective = OBJECTIVE.BALANCED) {
+// `clockOwnership` (0..1) is the four-minute strength already applied by
+// strategicPlayScore; possession-objective credit fades by it so a late lead is
+// not rewarded twice.
+function objectiveFit(profile = {}, objective = OBJECTIVE.BALANCED, { clockOwnership = 0 } = {}) {
   const mechanism = profile.playMechanism;
   const decision = profile.decisionClass;
   const stress = new Set(profile.fieldStress || []);
@@ -111,7 +114,11 @@ function objectiveFit(profile = {}, objective = OBJECTIVE.BALANCED) {
     if (decision === 'run' || decision === 'hybrid') score += 0.55;
     if (mechanism === 'screen' || stress.has('short_outside') || stress.has('short_middle')) score += 0.20;
     if (stress.has('deep_middle') || stress.has('deep_outside')) score -= 0.30;
-    reasons.push('Drive objective favors efficient possession-preserving structure.');
+    const share = Math.max(0, 1 - Math.max(0, Math.min(1, Number(clockOwnership) || 0)));
+    score *= share;
+    reasons.push(share < 1
+      ? 'Drive objective favors possession-preserving structure (clock/lead credit already applied by the strategic situation).'
+      : 'Drive objective favors efficient possession-preserving structure.');
   } else if ([OBJECTIVE.TWO_MINUTE, OBJECTIVE.QUICK_SCORE, OBJECTIVE.AGGRESSIVE].includes(objective)) {
     if (stress.has('intermediate_outside') || stress.has('intermediate_middle')) score += 0.35;
     if (stress.has('deep_middle') || stress.has('deep_outside') || stress.has('vertical')) score += 0.45;
