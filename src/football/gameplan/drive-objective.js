@@ -18,6 +18,15 @@ function resolveObjective(situation = {}) {
   const quarter = Number(s.quarter || 0);
   const clock = Number.isFinite(Number(s.clockSeconds)) ? Number(s.clockSeconds) : null;
   const flags = s.flags || {};
+  const uncertainPhase = s.quarterConfidence === 'LOW' ||
+    (s.quarterEvidenceConflict === true && s.quarterConfidence !== 'HIGH');
+  if (uncertainPhase) {
+    return {
+      objective: OBJECTIVE.BALANCED,
+      reason: 'Quarter provenance is uncertain, so the coordinator stays BALANCED instead of inferring a late-game objective.',
+      phaseConfidence: s.quarterConfidence || 'LOW',
+    };
+  }
 
   if (flags.fourMinute) {
     return { objective: OBJECTIVE.FOUR_MINUTE, reason: 'Late lead creates a four-minute possession objective.' };
