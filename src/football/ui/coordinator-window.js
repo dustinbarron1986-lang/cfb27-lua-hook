@@ -658,7 +658,7 @@ function render(s) {
       els.defense.hidden = false;
       els.defense.innerHTML = contextHtml;
     }
-    els.detail.innerHTML = detail('GAMEPLAN', s.gameplanName) + detail('PLAN', s.planReason) + detail('WHY', s.coordinatorWhy || s.why);
+    els.detail.innerHTML = detail('LAST PLAY', s.result) + detail('GAMEPLAN', s.gameplanName) + detail('PLAN', s.planReason) + detail('WHY', s.coordinatorWhy || s.why);
   } else if (s.phase === 'selected' || s.phase === 'audible') {
     // The user's selection and execution guide are additive state. They must
     // never replace the coordinator's Stage-1 recommendation.
@@ -673,7 +673,7 @@ function render(s) {
     els.detail.className = 'read';
     const guideHtml = renderGuide(s.guide) ||
       detail('READ', Array.isArray(s.read) && s.read.length ? s.read : (s.read || 'No specific adjustment.'));
-    els.detail.innerHTML = detail('GAMEPLAN', s.gameplanName) + detail('PLAN', s.planReason) + detail('WHY', s.coordinatorWhy) +
+    els.detail.innerHTML = detail('LAST PLAY', s.result) + detail('GAMEPLAN', s.gameplanName) + detail('PLAN', s.planReason) + detail('WHY', s.coordinatorWhy) +
       renderPreSnapRecommendation(s.preSnapRecommendation) + guideHtml +
       (s.preSnapRecommendation ? '' : renderAudibleRecommendation(s.audibleRecommendation));
   } else if (s.phase === 'defensive_huddle') {
@@ -976,7 +976,7 @@ class CoordinatorWindow {
       planReason: null,
       audibleRecommendation: null,
       preSnapRecommendation: null,
-      result: null,
+,
       error: null,
       updatedAt: new Date().toISOString()
     };
@@ -1065,7 +1065,7 @@ class CoordinatorWindow {
         guide: null,
         audibleRecommendation: null,
         preSnapRecommendation: null,
-        result: null
+
       });
     }
     return this._set({
@@ -1145,7 +1145,7 @@ class CoordinatorWindow {
         guide: null,
         audibleRecommendation: null,
         preSnapRecommendation: null,
-        result: null
+
       });
     }
     return this._set({
@@ -1206,7 +1206,7 @@ class CoordinatorWindow {
       guide: advice?.guide || null,
       audibleRecommendation: advice?.audible || null,
       preSnapRecommendation: advice?.preSnap || null,
-      result: null
+
     });
   }
 
@@ -1220,21 +1220,9 @@ class CoordinatorWindow {
     else if (r.firstDown) flags.push('FIRST DOWN');
     if (r.turnover) flags.push('CHANGE OF POSSESSION');
     if (typeof r.yards === 'number' && Math.abs(r.yards) >= 20) flags.push('BIG PLAY');
-    return this._set({
-      phase: 'result',
-      call: event.play?.name || null,
-      formation: event.play?.formation || null,
-      why: null,
-      defense: null,
-      defenseFormation: null,
-      cpuPlay: null,
-      cpuFormation: null,
-      read: null,
-      guide: null,
-      audibleRecommendation: null,
-      preSnapRecommendation: null,
-      result: [yards, ...flags].join(' • ')
-    });
+    const prefix = event.play?.name ? event.play.name + ': ' : '';
+    // Result presentation must not invalidate or replace the active huddle.
+    return this._set({ result: prefix + [yards, ...flags].join(' • ') });
   }
 
   showError(error, state = null) {
