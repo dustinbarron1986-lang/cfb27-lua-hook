@@ -105,6 +105,7 @@ function situationFromState(state) {
       : (offenseScore == null || defenseScore == null ? null : offenseScore - defenseScore),
     quarterSource: state.quarterSource || null,
     quarterConfidence: state.quarterConfidence || null,
+    quarterEvidenceConflict: state.quarterEvidenceConflict === true,
     gamePhase: state.gamePhase || null,
     scoreDifferentialSource: state.scoreDifferentialSource || (userIsHome == null ? 'UNAVAILABLE' : 'VERIFIED_USER_HOME_AWAY'),
   };
@@ -113,6 +114,19 @@ function situationFromState(state) {
 }
 
 const ORACLE_CHANGE_THRESHOLD = 0.85;
+
+function situationIdentityKey(state) {
+  const situation = situationFromState(state || {});
+  return [
+    state?.possession ?? 'x',
+    state?.quarter ?? 'x',
+    state?.down ?? 'x',
+    state?.distance ?? 'x',
+    state?.fieldX ?? 'x',
+    state?.lineToGain ?? 'x',
+    situation.hash || 'UNKNOWN',
+  ].join('|');
+}
 
 function isOffensiveScrimmageSituation(state) {
   if (Number(state?.possession) !== 0) return false;
@@ -324,9 +338,16 @@ function printRecommendation(engine, playbooks, state, io, coordinatorWindow) {
     family: top.diagnostic?.counter?.structure?.primaryThreat || top.play.primaryConcept || top.play.presentationFamily || null,
   });
   io.log(`\n[OC] ${downText(state.down)} & ${state.distance} | Q${state.quarter} ${fmtClock(state.gameClockSeconds)}`);
+  if (top.driveObjective?.objective) io.log(`[OC] OBJECTIVE: ${top.driveObjective.objective} | quarterConfidence=${state.quarterConfidence || 'UNSPECIFIED'}`);
+  if (top.sequenceIntent) io.log(`[OC] SEQUENCE: ${top.sequenceIntent.stage || top.sequenceIntent.intent || top.sequenceIntent.reason || 'active'}`);
+  const empirical = top.diagnostic?.empiricalSituation;
+  if (empirical?.available) io.log(`[OC] SITUATION PRIOR: ${empirical.rowId || '?'} | ${String(empirical.mode || '?').toUpperCase()} ${Number(empirical.score || 0) >= 0 ? '+' : ''}${Number(empirical.score || 0).toFixed(3)}`);
+  const hist = top.diagnostic?.historicalDefense;
+  if (hist?.sampleSize) io.log(`[OC] HIST DEF: n=${hist.sampleSize} confidence=${hist.confidence} raw=${hist.rawStructuralScore} weight=${hist.appliedConfidenceWeight} applied=${hist.appliedContribution}`);
+  if (situation.hash && situation.hash !== 'UNKNOWN') io.log(`[OC] HASH: ${situation.hash} | field=${situation.fieldSide || '?'} boundary=${situation.boundarySide || '?'}`);
   io.log(`[OC] CALL: ${top.play.formation || '?'} / ${top.play.name || top.play.id}  score=${top.score}`);
   if (ranked.gameplan?.gameplanName) {
-    io.log(`[OC] GAMEPLAN: ${ranked.gameplan.gameplanName} | callSheet=${ranked.gameplan.callSheetSize} | aggression=${ranked.gameplan.aggressiveness}`);
+    io.log(`[OC] GAMEPLAN: ${ranked.gameplan.gameplanName} | fullPlaybook=${ranked.callSheet?.eligible ?? playbooks.offense?.plays?.length ?? 0} | aggression=${ranked.gameplan.aggressiveness} | legacyCallSheet=${ranked.gameplan.callSheetSize} advisory-only`);
   }
   if (planReasons.length) io.log(`[OC] PLAN: ${planReasons.slice(0, 2).join(' | ')}`);
   if (top.reasons?.length) io.log(`[OC] WHY: ${top.reasons.slice(0, 3).join(' | ')}`);
@@ -888,6 +909,19 @@ function snapToFootballEvent(snap, playbooks) {
   return event;
 }
 
+function finalizeCompletedSnap(engine, reduced, playbooks, coordinatorWindow, io) {
+  if (reduced?.type !== 'completed_snap') return null;
+  const footballEvent = snapToFootballEvent(reduced.snap, playbooks);
+  const recorded = engine.recordPlay(footballEvent);
+  if (reduced.snap.start.possession === 0) {
+    coordinatorWindow.showResult({ event: footballEvent }, reduced.nextState || reduced.state || null);
+  }
+  io.log(`\n[SNAP ${reduced.snap.serial}] ${recorded.play?.name || 'Unknown offense'} vs ${recorded.opponentPlay?.name || 'Unknown defense'}`);
+  io.log(`[SNAP ${reduced.snap.serial}] result=${reduced.snap.result.yards >= 0 ? '+' : ''}${reduced.snap.result.yards} yd` +
+    `${reduced.snap.result.firstDown ? ' FIRST DOWN' : ''}${reduced.snap.result.touchdown ? ' TD' : ''}${reduced.snap.result.turnover ? ' TURNOVER' : ''}`);
+  return recorded;
+}
+
 // Builds the object CoordinatorWindow uses to serve /api/playbooks, /api/config,
 // and POST /api/config/playbooks. Deliberately a plain closure inside
 // runLiveCoordinator (not a standalone exported function) because it needs
@@ -1057,6 +1091,10 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   // Diagnostic-only deduplication. This key never participates in freshness,
   // authority resolution, snap detection, performance recording, or advice.
   let lastAuthorityDiagnosticKey = null;
+  let lastPhaseDiagnosticKey = null;
+  let lastPhaseQuarter = null;
+  let lastPhaseSource = null;
+  let lastDefensiveAuthorityDiagnosticKey = null;
   let quarantine = { offense: { available: false }, defense: { available: false } };
   let fresh = { offense: false, defense: false };
   let cleared = { offense: false, defense: false };
@@ -1113,11 +1151,30 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
       const phaseResolved = phaseTracker.resolve(event.payload || {});
       const state = phaseResolved.state;
       const lifecycleEvent = phaseResolved.lifecycle;
+      const phaseDiagnosticKey = [
+        phaseResolved.memoryQuarter ?? 'x', phaseResolved.apiQuarter ?? 'x', phaseResolved.quarter ?? 'x',
+        phaseResolved.quarterSource, phaseResolved.quarterConfidence,
+        phaseResolved.quarterEvidenceConflict ? 'conflict' : 'agree',
+        phaseResolved.clockWrapDetected ? 'wrap' : 'steady', lifecycleEvent || '',
+      ].join('|');
+      if (phaseDiagnosticKey !== lastPhaseDiagnosticKey &&
+          (phaseResolved.quarterEvidenceConflict || phaseResolved.clockWrapDetected || lifecycleEvent ||
+           phaseResolved.quarter !== lastPhaseQuarter || phaseResolved.quarterSource !== lastPhaseSource)) {
+        io.log(`[PHASE] memory=${phaseResolved.memoryQuarter ?? '?'} api=${phaseResolved.apiQuarter ?? '?'} resolved=${phaseResolved.quarter ?? '?'} source=${phaseResolved.quarterSource} confidence=${phaseResolved.quarterConfidence} clock=${fmtClock(state.gameClockSeconds)} wrap=${phaseResolved.clockWrapDetected ? 'yes' : 'no'}`);
+      }
+      lastPhaseDiagnosticKey = phaseDiagnosticKey;
+      lastPhaseQuarter = phaseResolved.quarter;
+      lastPhaseSource = phaseResolved.quarterSource;
       if (lifecycleEvent) {
         io.log(`[GAME] ${lifecycleEvent} | phase=${phaseResolved.phase} | quarterSource=${phaseResolved.quarterSource} | scoreSource=${phaseResolved.scoreDifferentialSource}`);
       }
       const reduced = reducer.ingest(state);
       if (reduced.type === 'ignored') continue;
+
+      // Finalize the PREVIOUS snap before ranking nextState. This makes the
+      // first Stage-1 call for the new huddle see performance, sequence,
+      // self-scout and resulting field/hash state.
+      finalizeCompletedSnap(engine, reduced, playbooks, coordinatorWindow, io);
 
       const current = reduced.type === 'completed_snap' ? reduced.nextState : reduced.state;
       if (current) {
@@ -1131,7 +1188,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
             gamePhase: current.gamePhase,
           });
         }
-        const situationKey = `${current.possession}|${current.quarter}|${current.down}|${current.distance}|${current.fieldX}|${current.lineToGain}`;
+        const situationKey = situationIdentityKey(current);
         if (situationKey !== lastSituationKey) {
           quarantine = handleNewSituation(engine, playbooks, current, lastSituationKey, situationKey, io, coordinatorWindow);
           fresh = { offense: false, defense: false };
@@ -1181,6 +1238,14 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
         );
 
         const exactDefense = exactDefenseFromState(engine, current, fresh, authoritativePlayStore);
+        if (exactDefense) {
+          const auth = exactDefense.authoritativeDefense || {};
+          const defKey = [exactDefense.set || '', exactDefense.name || '', auth.status || '', auth.playKey || '', auth.reason || ''].join('|');
+          if (defKey !== lastDefensiveAuthorityDiagnosticKey) {
+            io.log(`[DEF-AUTH] live set=${exactDefense.set || '?'} play=${exactDefense.name || '?'} status=${auth.status || 'unavailable'} strategy=${auth.resolution?.matchStrategy || '?'} playKey=${auth.playKey || '?'} known=${(auth.assignments || []).filter(row => row.known).length}/11 zones=${(auth.zones || []).length} rushers=${(auth.rush || []).length} man=${(auth.man || []).length} reason=${auth.reason || 'resolved'}`);
+            lastDefensiveAuthorityDiagnosticKey = defKey;
+          }
+        }
         const oracleOffenseCall = callFromState(current, 'offense');
         if (current.possession === 0 && fresh.offense && exactDefense && oracleOffenseCall.available) {
           const oracleRecommendationKey = [
@@ -1234,20 +1299,6 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
         }, state);
       }
 
-      if (reduced.type === 'completed_snap') {
-        const footballEvent = snapToFootballEvent(reduced.snap, playbooks);
-        const recorded = engine.recordPlay(footballEvent);
-        if (reduced.snap.start.possession === 0) {
-          coordinatorWindow.showResult({ event: footballEvent }, current);
-          // showResult just overwrote the recommendation we computed above for this same
-          // situation. Invalidate the dedup key so the next telemetry sample (~1s later)
-          // re-triggers printRecommendation instead of leaving the window stuck on RESULT.
-          lastSituationKey = null;
-        }
-        io.log(`\n[SNAP ${reduced.snap.serial}] ${recorded.play?.name || 'Unknown offense'} vs ${recorded.opponentPlay?.name || 'Unknown defense'}`);
-        io.log(`[SNAP ${reduced.snap.serial}] result=${reduced.snap.result.yards >= 0 ? '+' : ''}${reduced.snap.result.yards} yd` +
-          `${reduced.snap.result.firstDown ? ' FIRST DOWN' : ''}${reduced.snap.result.touchdown ? ' TD' : ''}${reduced.snap.result.turnover ? ' TURNOVER' : ''}`);
-      }
     }
   } finally {
     const gameplanReview = engine.reviewGameplan?.() || [];
@@ -1291,5 +1342,7 @@ module.exports = {
   rearmAfterAdministrativeReset,
   createPlaybookService,
   playbookLogLine,
+  situationIdentityKey,
+  finalizeCompletedSnap,
   GamePhaseTracker,
 };
