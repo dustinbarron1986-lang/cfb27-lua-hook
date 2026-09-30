@@ -63,8 +63,10 @@ class RecommendationHistory {
     const exactHits = id == null ? 0 : recent.filter(row => row.playId === id).length;
     const familyKey = family || play?.coverageFamily || play?.conceptFamily || play?.primaryConcept || play?.presentationFamily || null;
     const familyHits = familyKey == null ? 0 : recent.filter(row => String(row.family || '') === String(familyKey)).length;
-    const exact = -Math.min(exactHits, 3) * 0.45;
-    const structural = -Math.min(Math.max(0, familyHits - exactHits), 3) * 0.16;
+    // Recommendation exposure suppresses display spam only; it is not a
+    // football reason to force artificial variety.
+    const exact = -Math.min(exactHits, 3) * 0.06;
+    const structural = -Math.min(Math.max(0, familyHits - exactHits), 3) * 0.02;
     return {
       score: exact + structural,
       exactHits,
