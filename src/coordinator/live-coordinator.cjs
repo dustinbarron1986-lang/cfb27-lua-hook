@@ -15,7 +15,14 @@ const {
 } = require('./playbook-loader.cjs');
 const { loadCoordinatorConfig, saveCoordinatorConfig } = require('../football/config/coordinator-config');
 const { EaPlayKnowledgeStore } = require('../football/knowledge/ea-play-knowledge-store');
-const { resolveAuthoritativeDefense } = require('../football/analysis/authoritative-defense');
+const {
+  resolveAuthoritativeDefense,
+  attachDefensiveAuthority,
+  OpponentDefenseBookTracker,
+  defensiveAuthorityLogLine,
+} = require('../football/analysis/authoritative-defense');
+const { EaDefensivePlayStore } = require('../football/knowledge/ea-defensive-play-store');
+const { coverageFamilyFromAuthority } = require('../football/analysis/structural-threat-model');
 const { GamePhaseTracker } = require('./game-phase-tracker.cjs');
 const { oracleStrategicDecision } = require('../football/gameplan/strategic-context');
 const {
@@ -150,18 +157,30 @@ function isOffensiveScrimmageSituation(state) {
   return true;
 }
 
-function exactDefenseFromState(engine, state, fresh = null, authoritativeStore = null) {
+// The exact CPU defensive call while the user is on offense. Its playbook is
+// the OPPONENT's, so authority resolves against an explicitly configured
+// opponent book, else the books narrowed by this game's earlier exact
+// observations, else the whole exported corpus (see ea-defensive-play-store).
+function exactDefenseFromState(engine, state, fresh = null, defensiveContext = null) {
   if (state?.possession !== 0 || fresh?.defense !== true) return null;
   const call = callFromState(state, 'defense');
   if (!call.available || !call.name) return null;
   const descriptor = engine.knowledge.catalogResolver?.describeDefensivePlay?.(call.name) || null;
-  const authoritativeDefense = resolveAuthoritativeDefense({ store: authoritativeStore, liveCall: call });
+  const authoritativeDefense = defensiveContext?.store
+    ? resolveAuthoritativeDefense({
+      defensiveStore: defensiveContext.store,
+      liveCall: call,
+      bookId: defensiveContext.bookId ?? null,
+      candidateBookIds: defensiveContext.tracker?.candidates || null,
+    })
+    : { available: false, status: 'unavailable', reason: 'defensive_authority_store_unavailable' };
+  const authoredCoverage = authoritativeDefense.available ? coverageFamilyFromAuthority(authoritativeDefense.summary) : null;
   return {
     id: call.id || call.name,
     name: call.name,
     formation: call.set,
     set: call.set,
-    coverageFamily: descriptor?.coverageFamily || engine.knowledge.resolveCoverage(call.name) || null,
+    coverageFamily: authoredCoverage || descriptor?.coverageFamily || engine.knowledge.resolveCoverage(call.name) || null,
     assignmentFamilies: descriptor?.assignmentFamilies || [],
     concepts: descriptor?.concepts || [],
     authoritativeDefense,
@@ -928,7 +947,7 @@ function finalizeCompletedSnap(engine, reduced, playbooks, coordinatorWindow, io
 // live read/write access to the same `playbooks`/`fresh`/`lastKnownState`
 // bindings the main loop mutates each tick -- a snapshot passed in as a
 // parameter would go stale immediately.
-function createPlaybookService({ root, configPath, database, playbooks, engine, coordinatorWindow, io, getLastKnownState, getFresh }) {
+function createPlaybookService({ root, configPath, database, playbooks, engine, coordinatorWindow, io, getLastKnownState, getFresh, defensivePlayStore = null, getDefensiveContext = () => null }) {
   function listPlaybooks() {
     if (!database || !DatabasePlaybookRepository) return { offense: [], defense: [] };
     const repo = new DatabasePlaybookRepository(database);
@@ -1019,6 +1038,10 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
     // SnapReducer/performance history are untouched; the new candidate pool
     // simply becomes authoritative for every subsequent tick that reads
     // playbooks.offense/playbooks.defense.
+    if (side === 'defense' && defensivePlayStore) {
+      const stats = attachDefensiveAuthority(newBook, defensivePlayStore);
+      io.log(`[DEF-AUTH] book=${newBook.id} candidates annotated resolved=${stats.resolved} partial=${stats.partial} unresolved=${stats.unresolved}`);
+    }
     playbooks[side] = newBook;
     if (side === 'offense') {
       engine.prepareAudiblePackages?.(newBook);
@@ -1031,7 +1054,7 @@ function createPlaybookService({ root, configPath, database, playbooks, engine, 
     if (side === 'offense' && lastKnownState && isOffensiveScrimmageSituation(lastKnownState)) {
       const initial = printRecommendation(engine, playbooks, lastKnownState, io, coordinatorWindow);
       const fresh = getFresh();
-      const exactDefense = exactDefenseFromState(engine, lastKnownState, fresh);
+      const exactDefense = exactDefenseFromState(engine, lastKnownState, fresh, getDefensiveContext());
       if (initial && exactDefense) {
         printOracleRecommendation(engine, playbooks, lastKnownState, exactDefense, io, coordinatorWindow);
       }
@@ -1083,6 +1106,24 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
   });
   const audiblePreparation = engine.prepareAudiblePackages(playbooks.offense);
   const gameplanPreparation = engine.prepareGameplan(playbooks.offense);
+  // Compiled EA defensive playbook authority (checked in, ~0.8 MB, loaded
+  // once). Missing data disables only the defensive authority layer.
+  let defensivePlayStore = null;
+  try {
+    defensivePlayStore = EaDefensivePlayStore.load(path.resolve(root, 'data/knowledge/ea-defensive-play-knowledge.json'));
+  } catch (error) {
+    io.log(`[DEF-AUTH] defensive authority unavailable: ${error.message}`);
+  }
+  const opponentDefenseBooks = new OpponentDefenseBookTracker();
+  const defensiveContext = () => (defensivePlayStore ? {
+    store: defensivePlayStore,
+    bookId: config.opponentDefensePlaybookId ?? null,
+    tracker: opponentDefenseBooks,
+  } : null);
+  if (defensivePlayStore && playbooks.defense) {
+    const stats = attachDefensiveAuthority(playbooks.defense, defensivePlayStore);
+    io.log(`[DEF-AUTH] book=${playbooks.defense.id} candidates annotated resolved=${stats.resolved} partial=${stats.partial} unresolved=${stats.unresolved}`);
+  }
   const reducer = new SnapReducer();
   const phaseTracker = new GamePhaseTracker();
   let lastSituationKey = null;
@@ -1129,6 +1170,8 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
     io,
     getLastKnownState: () => lastKnownState,
     getFresh: () => fresh,
+    defensivePlayStore,
+    getDefensiveContext: defensiveContext,
   });
 
   const after = await tailCursor(client);
@@ -1238,12 +1281,16 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
           io
         );
 
-        const exactDefense = exactDefenseFromState(engine, current, fresh, authoritativePlayStore);
+        const exactDefense = exactDefenseFromState(engine, current, fresh, defensiveContext());
         if (exactDefense) {
           const auth = exactDefense.authoritativeDefense || {};
           const defKey = [exactDefense.set || '', exactDefense.name || '', auth.status || '', auth.playKey || '', auth.reason || ''].join('|');
           if (defKey !== lastDefensiveAuthorityDiagnosticKey) {
-            io.log(`[DEF-AUTH] live set=${exactDefense.set || '?'} play=${exactDefense.name || '?'} status=${auth.status || 'unavailable'} strategy=${auth.resolution?.matchStrategy || '?'} playKey=${auth.playKey || '?'} known=${(auth.assignments || []).filter(row => row.known).length}/11 zones=${(auth.zones || []).length} rushers=${(auth.rush || []).length} man=${(auth.man || []).length} reason=${auth.reason || 'resolved'}`);
+            io.log(defensiveAuthorityLogLine(auth, { bookId: config.opponentDefensePlaybookId ?? null }));
+            // Narrow the opponent's book once per distinct exact call.
+            if (defensivePlayStore && auth.resolution?.evidence !== 'EXACT_BOOK') {
+              opponentDefenseBooks.observe(defensivePlayStore, { setName: exactDefense.set, playName: exactDefense.name });
+            }
             lastDefensiveAuthorityDiagnosticKey = defKey;
           }
         }
@@ -1288,6 +1335,7 @@ async function runLiveCoordinator({ repoRoot, configPath, signal, io = console }
         );
       }
 
+      if (lifecycleEvent === 'FINAL') opponentDefenseBooks.reset();
       if (lifecycleEvent) {
         const review = lifecycleEvent === 'HALFTIME'
           ? engine.halftimeGameplanReview?.() || null

@@ -344,6 +344,7 @@ function advisePreSnapCoordinator({
     offensiveAuthority,
     offensiveProfile,
     defensiveAuthority: defensiveCall?.authoritativeDefense || null,
+    runGap: authoritativeKnowledge?.runGap || null,
   });
   const empiricalCoverage = empiricalPrior?.routeCoverageEvidence
     ? empiricalPrior.routeCoverageEvidence(offensiveProfile, defensiveCall || {})
@@ -405,7 +406,7 @@ function advisePreSnapCoordinator({
           ? assignmentMatchup.reasons
           : ['Exact individual defender responsibilities are unavailable, so assignment-matchup confidence is limited and broad structure remains the fallback.']),
       ],
-      confidence: defense.provenance === 'DERIVED_STRUCTURAL' ? 'HIGH' : 'MEDIUM',
+      confidence: defense.provenance === 'EA_AUTHORED' || defense.provenance === 'DERIVED_STRUCTURAL' ? 'HIGH' : 'MEDIUM',
       source: 'COUNTER_MODEL',
       capabilities,
     });
@@ -429,7 +430,9 @@ function advisePreSnapCoordinator({
       authoritativeKnowledge,
       reasons: [
         'Exact defensive structure identifies pressure and the EA-authored assignment map shows ' + protector.player + ' releasing as an eligible receiver.',
-        'Keeping that player in adds one blocker. Exact rusher count/free-rusher identity is not exposed, so the coordinator does not claim the protection is numerically solved.',
+        defense.authoritative
+          ? 'Keeping that player in adds one blocker against ' + defense.authoritative.rushers + ' EA-authored rushers. Live free-rusher identity is not tracked, so the coordinator does not claim the protection is solved.'
+          : 'Keeping that player in adds one blocker. Exact rusher count/free-rusher identity is not exposed, so the coordinator does not claim the protection is numerically solved.',
       ],
       confidence: 'MEDIUM',
       source: 'EA_ASSIGNMENT+DERIVED_DEFENSE_STRUCTURE',

@@ -163,16 +163,61 @@ function classifyOffensiveStructure(play = {}, authoritative = null) {
   };
 }
 
+// Coverage family implied by an EA-authored defensive structure summary
+// (authoritative-defense.js). Null when the authored shell does not determine
+// a family; callers then fall back to the name-based resolver.
+function coverageFamilyFromAuthority(summary = {}) {
+  const man = summary.coverageMode === 'MAN' || (summary.coverageMode === 'MIXED' && summary.manDefenders >= 3);
+  switch (summary.shell) {
+    case 'QUARTERS': return 'cover_4';
+    case 'QUARTER_HALF': return 'cover_6';
+    case 'THREE_DEEP': return 'cover_3';
+    case 'TWO_HIGH': return man ? 'cover_2_man' : 'cover_2';
+    case 'ONE_HIGH': return man ? 'cover_1' : null;
+    case 'ZERO_DEEP': return man ? 'cover_0' : null;
+    default: return null;
+  }
+}
+
+// Authoritative defensive facts, or null when the call is unresolved. A
+// partial resolution only asserts what its known defenders prove: pressure
+// requires five KNOWN rushers.
+function authoritativeDefensiveFacts(play) {
+  const authority = play?.authoritativeDefense;
+  if (!authority?.available || !authority.summary) return null;
+  const s = authority.summary;
+  return {
+    coverageFamily: coverageFamilyFromAuthority(s),
+    pressure: s.rushers >= 5,
+    man: s.manDefenders >= 3,
+    zone: (s.deepCount + s.underCount) >= 3,
+    robberMiddle: Boolean(s.responsibilities?.MIDDLE_HOOK) && (s.shell === 'ONE_HIGH' || s.shell === 'THREE_DEEP'),
+    standardRush: s.rushers > 0 && s.rushers <= 4,
+    complete: authority.knownAssignments >= authority.totalAssignments,
+    summary: s,
+  };
+}
+
 function classifyDefensiveStructure(play = {}, knowledge = null) {
   const name = String(play.name || '');
   const text = normalize([name, play.formation, play.set, ...(play.concepts || []), ...(play.assignmentFamilies || [])].join(' '));
-  const coverageFamily = play.coverageFamily || knowledge?.resolveCoverage?.(name) || null;
+  const authored = authoritativeDefensiveFacts(play);
+  // Authored structure replaces name heuristics rather than adding a second
+  // vote for the same fact.
+  const coverageFamily = authored?.coverageFamily || play.coverageFamily || knowledge?.resolveCoverage?.(name) || null;
   const assignmentFamilies = unique(play.assignmentFamilies || []);
-  const pressure = assignmentFamilies.includes('blitz_rush') || /\bblitz\b|\bpressure\b|\bfire\b|\bsmoke\b|\bsting\b|\bzero\b|\bdog\b/.test(text);
-  const standardRush = assignmentFamilies.includes('standard_pass_rush');
-  const robberMiddle = assignmentFamilies.includes('robber_hole_or_intermediate_middle_family');
-  const man = coverageFamily === 'cover_0' || coverageFamily === 'cover_1' || coverageFamily === 'cover_2_man' || assignmentFamilies.includes('man_coverage_matchup_family');
-  const zone = ['cover_2', 'cover_3', 'cover_4', 'cover_6'].includes(coverageFamily) || assignmentFamilies.includes('zone_coverage_responsibility_family');
+  const heuristicPressure = assignmentFamilies.includes('blitz_rush') || /\bblitz\b|\bpressure\b|\bfire\b|\bsmoke\b|\bsting\b|\bzero\b|\bdog\b/.test(text);
+  const pressure = authored
+    ? (authored.pressure || (!authored.complete && heuristicPressure && authored.summary.rushers >= 4))
+    : heuristicPressure;
+  const standardRush = authored ? authored.standardRush : assignmentFamilies.includes('standard_pass_rush');
+  const robberMiddle = authored ? authored.robberMiddle : assignmentFamilies.includes('robber_hole_or_intermediate_middle_family');
+  const man = authored
+    ? authored.man
+    : (coverageFamily === 'cover_0' || coverageFamily === 'cover_1' || coverageFamily === 'cover_2_man' || assignmentFamilies.includes('man_coverage_matchup_family'));
+  const zone = authored
+    ? authored.zone
+    : (['cover_2', 'cover_3', 'cover_4', 'cover_6'].includes(coverageFamily) || assignmentFamilies.includes('zone_coverage_responsibility_family'));
   const formation = normalize(play.formation || play.set || '');
   const heavyFront = /\b4 3\b|\b4 4\b|\b5 2\b|\b3 4\b|\bgoal line\b/.test(formation);
   const balancedFront = /\b3 3 5\b|\b4 2 5\b|\bnickel 3 3\b/.test(formation);
@@ -225,13 +270,18 @@ function classifyDefensiveStructure(play = {}, knowledge = null) {
     capabilities: [...capabilities],
     weaknesses: [...weaknesses],
     package: { heavyFront, balancedFront, lightPackage, formation: play.formation || play.set || null },
-    provenance: assignmentFamilies.length ? PROVENANCE.DERIVED_STRUCTURAL : PROVENANCE.HEURISTIC,
+    provenance: authored
+      ? PROVENANCE.EA_AUTHORED
+      : (assignmentFamilies.length ? PROVENANCE.DERIVED_STRUCTURAL : PROVENANCE.HEURISTIC),
+    authoritative: authored ? { complete: authored.complete, shell: authored.summary.shell, rushers: authored.summary.rushers, blitzers: authored.summary.blitzers } : null,
   };
 }
 
 module.exports = {
   PROVENANCE,
   normalize,
+  coverageFamilyFromAuthority,
+  authoritativeDefensiveFacts,
   classifyOffensiveStructure,
   classifyDefensiveStructure,
 };

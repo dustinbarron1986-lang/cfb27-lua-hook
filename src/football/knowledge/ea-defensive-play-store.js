@@ -186,6 +186,19 @@ class EaDefensivePlayStore {
     return frozen;
   }
 
+  // Exact catalog identity (book + formation_id + set_id + play name), as
+  // carried by DB-loaded playbook plays. No name-only fallback.
+  resolvePlaybookPlay({ bookId, formationId, setId, playName } = {}) {
+    const book = this.doc.books?.[String(bookId)];
+    if (!book) return { resolved: false, status: 'unavailable', reason: 'defensive_book_not_in_authority_artifact' };
+    const name = normalizedName(playName);
+    const hits = (book.plays || [])
+      .filter(row => String(row[1]) === String(formationId) && String(row[2]) === String(setId) && normalizedName(row[3]) === name)
+      .map(row => ({ bookId: String(bookId), row, setName: book.formations?.[row[1]]?.sets?.[row[2]] ?? null }));
+    if (!hits.length) return { resolved: false, status: 'unresolved', reason: 'no_exact_catalog_identity_match', playName };
+    return this._resolveCandidates({ evidence: 'EXACT_CATALOG_IDENTITY', tier: 'ids', hits, setName: hits[0].setName, playName });
+  }
+
   resolveLiveCall({ setName, playName, bookId = null, candidateBookIds = null } = {}) {
     if (!normalizedName(playName)) {
       return { resolved: false, status: 'unavailable', reason: 'live_defensive_play_name_unavailable' };

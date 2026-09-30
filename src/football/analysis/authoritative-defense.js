@@ -217,6 +217,28 @@ function resolveAuthoritativeDefense({ defensiveStore = null, store = null, live
   return { available: false, status: 'unavailable', reason: 'defensive_authority_store_unavailable' };
 }
 
+// Attaches EA-authored defensive structure to every play of a loaded defensive
+// playbook (by exact book/formation/set/name identity). Done once per book
+// load; plays that do not resolve are left untouched and keep the name-based
+// fallback. Returns resolution counts for logging.
+function attachDefensiveAuthority(playbook, defensiveStore) {
+  const stats = { plays: 0, resolved: 0, partial: 0, unresolved: 0 };
+  if (!playbook?.plays?.length || !defensiveStore?.resolvePlaybookPlay) return stats;
+  for (const play of playbook.plays) {
+    stats.plays += 1;
+    const bookId = play.sourcePlaybookId ?? playbook.id;
+    const resolution = play.formationId != null && play.setId != null
+      ? defensiveStore.resolvePlaybookPlay({ bookId, formationId: play.formationId, setId: play.setId, playName: play.name })
+      : defensiveStore.resolveLiveCall({ setName: play.setName || play.formation, playName: play.name, bookId });
+    const authority = buildFromDefensiveResolution(resolution);
+    if (!authority.available) { stats.unresolved += 1; continue; }
+    if (authority.status === 'resolved') stats.resolved += 1;
+    else stats.partial += 1;
+    play.authoritativeDefense = authority;
+  }
+  return stats;
+}
+
 function defensiveAuthorityLogLine(authority, { bookId = null } = {}) {
   const r = authority?.resolution || {};
   const s = authority?.summary || {};
@@ -246,5 +268,6 @@ module.exports = {
   buildFromDefensiveResolution,
   resolveAuthoritativeDefense,
   OpponentDefenseBookTracker,
+  attachDefensiveAuthority,
   defensiveAuthorityLogLine,
 };
